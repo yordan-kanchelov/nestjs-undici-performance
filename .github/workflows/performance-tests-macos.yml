@@ -1,0 +1,191 @@
+name: Performance Tests on macOS
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      node_versions:
+        description: 'Node.js versions to test (comma-separated, e.g., 20,22,24)'
+        required: false
+        default: '20,22,24'
+        type: string
+
+jobs:
+  performance-test:
+    runs-on: macos-latest
+    strategy:
+      matrix:
+        node-version: [20, 22, 24]
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'  # Use Node 20 for running scripts, Docker will use matrix version
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: |
+          npm ci
+          brew install k6
+
+      - name: Setup Docker
+        run: |
+          brew install --cask docker
+          echo "Waiting for Docker to start..."
+          open --background -a Docker
+          
+          # Wait for Docker to be ready
+          COUNTER=0
+          while ! docker system info > /dev/null 2>&1; do
+            echo "Waiting for Docker to be ready... ($COUNTER/60)"
+            sleep 5
+            COUNTER=$((COUNTER + 5))
+            if [ $COUNTER -gt 60 ]; then
+              echo "Docker failed to start"
+              exit 1
+            fi
+          done
+          echo "Docker is ready"
+
+      - name: Build and start services for Node ${{ matrix.node-version }}
+        run: |
+          # Determine which docker-compose file to use
+          if [ "${{ matrix.node-version }}" = "20" ]; then
+            COMPOSE_FILE="docker-compose.yml"
+          else
+            COMPOSE_FILE="docker-compose-node${{ matrix.node-version }}.yml"
+          fi
+          
+          echo "Using $COMPOSE_FILE for Node.js ${{ matrix.node-version }}"
+          docker-compose -f $COMPOSE_FILE up -d --build
+          
+          # Wait for services to be healthy
+          echo "Waiting for services to be healthy..."
+          COUNTER=0
+          while [ $COUNTER -lt 60 ]; do
+            if docker-compose -f $COMPOSE_FILE ps | grep -E "(unhealthy|starting)" > /dev/null; then
+              echo "Services still starting... ($COUNTER/60)"
+              sleep 5
+              COUNTER=$((COUNTER + 5))
+            else
+              echo "All services are ready!"
+              docker-compose -f $COMPOSE_FILE ps
+              break
+            fi
+          done
+          
+          if [ $COUNTER -ge 60 ]; then
+            echo "Services failed to become healthy"
+            docker-compose -f $COMPOSE_FILE logs
+            exit 1
+          fi
+
+      - name: Run performance tests for Node ${{ matrix.node-version }}
+        run: |
+          k6 run k6-scripts/test-node${{ matrix.node-version }}.js
+
+      - name: Generate comparison report
+        if: matrix.node-version == 24  # Only generate final report after all tests
+        run: |
+          node generate-comparison-report.js
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results-node${{ matrix.node-version }}
+          path: |
+            results/node${{ matrix.node-version }}-performance-comparison.csv
+            results/node${{ matrix.node-version }}-performance-summary.json
+          retention-days: 30
+
+      - name: Upload comparison report
+        if: matrix.node-version == 24
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-comparison-report
+          path: results/PERFORMANCE-COMPARISON-REPORT.md
+          retention-days: 30
+
+      - name: Stop services
+        if: always()
+        run: |
+          if [ "${{ matrix.node-version }}" = "20" ]; then
+            docker-compose down
+          else
+            docker-compose -f docker-compose-node${{ matrix.node-version }}.yml down
+          fi
+
+  consolidate-results:
+    needs: performance-test
+    runs-on: macos-latest
+    if: always()
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Consolidate results
+        run: |
+          mkdir -p consolidated-results
+          
+          # Copy all results to consolidated directory
+          find artifacts -name "*.csv" -o -name "*.json" -o -name "*.md" | while read file; do
+            cp "$file" consolidated-results/
+          done
+          
+          # List all results
+          echo "=== Consolidated Performance Test Results ==="
+          ls -la consolidated-results/
+
+      - name: Upload consolidated results
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-performance-results
+          path: consolidated-results/
+          retention-days: 30
+
+      - name: Comment PR with results (if PR)
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            
+            // Read the performance comparison report
+            let reportContent = '';
+            const reportPath = 'consolidated-results/PERFORMANCE-COMPARISON-REPORT.md';
+            
+            if (fs.existsSync(reportPath)) {
+              reportContent = fs.readFileSync(reportPath, 'utf8');
+              
+              // Truncate if too long for PR comment
+              if (reportContent.length > 65000) {
+                reportContent = reportContent.substring(0, 65000) + '\n\n... (truncated)';
+              }
+              
+              // Create PR comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: `## 🚀 Performance Test Results\n\n${reportContent}\n\n[View full results in artifacts](https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId})`
+              });
+            }
