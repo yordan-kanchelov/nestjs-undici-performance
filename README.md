@@ -244,15 +244,6 @@ Each NestJS service:
    ./simple-test.sh
    ```
 
-### Extended Load Test
-
-For longer tests with timeout handling:
-
-```bash
-# Run with custom timeout (default 20 minutes)
-./run-k6-test.sh k6-scripts/load-test.js 30
-```
-
 ### Manual Testing
 
 Test individual endpoints:
@@ -283,9 +274,7 @@ nestjs-undici/
 ├── k6-scripts/
 │   ├── test-node20.js     # Node.js 20 test (2.5 min)
 │   ├── test-node22.js     # Node.js 22 test (2.5 min)
-│   ├── test-node24.js     # Node.js 24 test (2.5 min)
-│   ├── short-load-test.js # Legacy test (Node 20 only)
-│   └── load-test.js       # Extended load test (15 min)
+│   └── test-node24.js     # Node.js 24 test (2.5 min)
 ├── results/               # Test results (CSV, JSON, MD)
 ├── docker-compose.yml       # Node.js 20 configuration
 ├── docker-compose-node22.yml # Node.js 22 configuration
@@ -376,7 +365,6 @@ npm install undici
 ## 🏃 Available Scripts
 
 - `./test-all-node-versions.sh` - Run performance tests across Node.js 20, 22, and 24
-- `./run-k6-test.sh` - Run individual k6 tests with timeout handling
 - `./simple-test.sh` - Quick manual testing with curl for all services
 
 ### Docker Compose Files
