@@ -2,9 +2,9 @@ name: Performance Tests on macOS
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       node_versions:
@@ -19,7 +19,6 @@ jobs:
     strategy:
       matrix:
         node-version: [20, 22, 24]
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,7 +26,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '22'  # Use Node 22 for running scripts, Docker will use matrix version
+          node-version: '22' # Use Node 22 for running scripts, Docker will use matrix version
           cache: 'npm'
 
       - name: Install dependencies
@@ -40,7 +39,6 @@ jobs:
           brew install --cask docker
           echo "Waiting for Docker to start..."
           open --background -a Docker
-
           # Wait for Docker to be ready
           COUNTER=0
           while ! docker system info > /dev/null 2>&1; do
@@ -80,7 +78,6 @@ jobs:
               break
             fi
           done
-
           if [ $COUNTER -ge 60 ]; then
             echo "Services failed to become healthy"
             docker-compose -f $COMPOSE_FILE logs
@@ -92,7 +89,7 @@ jobs:
           k6 run k6-scripts/test-node${{ matrix.node-version }}.js
 
       - name: Generate comparison report
-        if: matrix.node-version == 24  # Only generate final report after all tests
+        if: matrix.node-version == 24 # Only generate final report after all tests
         run: |
           node generate-comparison-report.js
 
@@ -126,7 +123,6 @@ jobs:
     needs: performance-test
     runs-on: macos-latest
     if: always()
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -144,12 +140,10 @@ jobs:
       - name: Consolidate results
         run: |
           mkdir -p consolidated-results
-
           # Copy all results to consolidated directory
           find artifacts -name "*.csv" -o -name "*.json" -o -name "*.md" | while read file; do
             cp "$file" consolidated-results/
           done
-
           # List all results
           echo "=== Consolidated Performance Test Results ==="
           ls -la consolidated-results/
@@ -180,7 +174,6 @@ jobs:
               if (reportContent.length > 65000) {
                 reportContent = reportContent.substring(0, 65000) + '\n\n... (truncated)';
               }
-
               // Create PR comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
