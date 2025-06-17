@@ -46,32 +46,56 @@ This report compares the performance of three HTTP module configurations in Nest
 
 ### Node.js 20 (LTS)
 ${results.node20 && results.node20.results.express_axios?.duration_avg ? `
+#### Response Time Improvements
 - **Framework Impact (Fastify+Axios vs Express+Axios)**: ${results.node20.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement || 'N/A'}
 - **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: ${results.node20.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement || 'N/A'}
 - **Combined Impact (Fastify+Undici vs Express+Axios)**: ${results.node20.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'}
-- **Express + Axios Avg (Baseline)**: ${results.node20.results.express_axios.duration_avg.toFixed(2)}ms
-- **Fastify + Axios Avg**: ${results.node20.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
-- **Fastify + Undici Avg**: ${results.node20.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Average Response Times
+- **Express + Axios (Baseline)**: ${results.node20.results.express_axios.duration_avg.toFixed(2)}ms
+- **Fastify + Axios**: ${results.node20.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
+- **Fastify + Undici**: ${results.node20.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Throughput Improvements
+- **Fastify+Axios vs Express+Axios**: ${results.node20.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Fastify+Axios**: ${results.node20.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Express+Axios**: ${results.node20.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'}
 ` : 'No complete data available'}
 
 ### Node.js 22
 ${results.node22 && results.node22.results.express_axios?.duration_avg ? `
+#### Response Time Improvements
 - **Framework Impact (Fastify+Axios vs Express+Axios)**: ${results.node22.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement || 'N/A'}
 - **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: ${results.node22.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement || 'N/A'}
 - **Combined Impact (Fastify+Undici vs Express+Axios)**: ${results.node22.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'}
-- **Express + Axios Avg (Baseline)**: ${results.node22.results.express_axios.duration_avg.toFixed(2)}ms
-- **Fastify + Axios Avg**: ${results.node22.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
-- **Fastify + Undici Avg**: ${results.node22.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Average Response Times
+- **Express + Axios (Baseline)**: ${results.node22.results.express_axios.duration_avg.toFixed(2)}ms
+- **Fastify + Axios**: ${results.node22.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
+- **Fastify + Undici**: ${results.node22.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Throughput Improvements
+- **Fastify+Axios vs Express+Axios**: ${results.node22.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Fastify+Axios**: ${results.node22.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Express+Axios**: ${results.node22.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'}
 ` : 'No complete data available'}
 
 ### Node.js 24
 ${results.node24 && results.node24.results.express_axios?.duration_avg ? `
+#### Response Time Improvements
 - **Framework Impact (Fastify+Axios vs Express+Axios)**: ${results.node24.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement || 'N/A'}
 - **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: ${results.node24.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement || 'N/A'}
 - **Combined Impact (Fastify+Undici vs Express+Axios)**: ${results.node24.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'}
-- **Express + Axios Avg (Baseline)**: ${results.node24.results.express_axios.duration_avg.toFixed(2)}ms
-- **Fastify + Axios Avg**: ${results.node24.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
-- **Fastify + Undici Avg**: ${results.node24.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Average Response Times
+- **Express + Axios (Baseline)**: ${results.node24.results.express_axios.duration_avg.toFixed(2)}ms
+- **Fastify + Axios**: ${results.node24.results.fastify_axios?.duration_avg?.toFixed(2) || 'N/A'}ms
+- **Fastify + Undici**: ${results.node24.results.fastify_undici?.duration_avg?.toFixed(2) || 'N/A'}ms
+
+#### Throughput Improvements
+- **Fastify+Axios vs Express+Axios**: ${results.node24.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Fastify+Axios**: ${results.node24.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'}
+- **Fastify+Undici vs Express+Axios**: ${results.node24.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'}
 ` : 'No complete data available'}
 
 ## Detailed Comparison Tables
@@ -89,6 +113,13 @@ ${results.node24 && results.node24.results.express_axios?.duration_avg ? `
 | Node 20 | ${results.node20?.results.express_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node20?.results.fastify_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node20?.results.fastify_undici?.duration_p95?.toFixed(2) || 'N/A'} |
 | Node 22 | ${results.node22?.results.express_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node22?.results.fastify_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node22?.results.fastify_undici?.duration_p95?.toFixed(2) || 'N/A'} |
 | Node 24 | ${results.node24?.results.express_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node24?.results.fastify_axios?.duration_p95?.toFixed(2) || 'N/A'} | ${results.node24?.results.fastify_undici?.duration_p95?.toFixed(2) || 'N/A'} |
+
+### Throughput (requests/second)
+| Node Version | Express+Axios | Fastify+Axios | Fastify+Undici | Fastify+Axios vs Express+Axios | Fastify+Undici vs Express+Axios | Fastify+Undici vs Fastify+Axios |
+|--------------|---------------|---------------|----------------|--------------------------------|----------------------------------|----------------------------------|
+| Node 20 | ${results.node20?.results.express_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node20?.results.fastify_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node20?.results.fastify_undici?.rps?.toFixed(2) || 'N/A'} | ${results.node20?.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node20?.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node20?.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'} |
+| Node 22 | ${results.node22?.results.express_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node22?.results.fastify_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node22?.results.fastify_undici?.rps?.toFixed(2) || 'N/A'} | ${results.node22?.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node22?.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node22?.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'} |
+| Node 24 | ${results.node24?.results.express_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node24?.results.fastify_axios?.rps?.toFixed(2) || 'N/A'} | ${results.node24?.results.fastify_undici?.rps?.toFixed(2) || 'N/A'} | ${results.node24?.comparison?.fastify_axios_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node24?.comparison?.fastify_undici_vs_express_axios?.throughput_improvement || 'N/A'} | ${results.node24?.comparison?.fastify_undici_vs_fastify_axios?.throughput_improvement || 'N/A'} |
 
 ### HTTP Client Comparison (Fastify Framework Only)
 | Node Version | Fastify+Axios | Fastify+Undici | Improvement (%) |

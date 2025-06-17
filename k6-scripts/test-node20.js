@@ -1,6 +1,6 @@
 import http from 'k6/http';
 import { check } from 'k6';
-import { Rate, Trend } from 'k6/metrics';
+import { Rate, Trend, Counter } from 'k6/metrics';
 
 // Custom metrics
 const fastifyAxiosDuration = new Trend('fastify_axios_duration', true);
@@ -9,6 +9,9 @@ const expressAxiosDuration = new Trend('express_axios_duration', true);
 const fastifyAxiosErrors = new Rate('fastify_axios_errors');
 const fastifyUndiciErrors = new Rate('fastify_undici_errors');
 const expressAxiosErrors = new Rate('express_axios_errors');
+const fastifyAxiosRequests = new Counter('fastify_axios_requests');
+const fastifyUndiciRequests = new Counter('fastify_undici_requests');
+const expressAxiosRequests = new Counter('express_axios_requests');
 
 export const options = {
   scenarios: {
@@ -69,6 +72,7 @@ export function testExpressAxios() {
   
   expressAxiosDuration.add(res.timings.duration);
   expressAxiosErrors.add(!success);
+  expressAxiosRequests.add(1);
 }
 
 export function testFastifyAxios() {
@@ -83,6 +87,7 @@ export function testFastifyAxios() {
   
   fastifyAxiosDuration.add(res.timings.duration);
   fastifyAxiosErrors.add(!success);
+  fastifyAxiosRequests.add(1);
 }
 
 export function testFastifyUndici() {
@@ -97,6 +102,7 @@ export function testFastifyUndici() {
   
   fastifyUndiciDuration.add(res.timings.duration);
   fastifyUndiciErrors.add(!success);
+  fastifyUndiciRequests.add(1);
 }
 
 export function handleSummary(data) {
@@ -104,11 +110,19 @@ export function handleSummary(data) {
   const getMetrics = (prefix) => {
     const duration = data.metrics[`${prefix}_duration`];
     const errors = data.metrics[`${prefix}_errors`];
+    const requests = data.metrics[`${prefix}_requests`];
     
     if (!duration) return null;
     
+    // Get request count from the counter metric
+    const requestCount = requests ? requests.values.count : 0;
+    
+    // Calculate RPS based on total requests and scenario duration (70 seconds each)
+    const scenarioDurationSeconds = 70; // Each scenario runs for 70 seconds
+    const rps = requestCount / scenarioDurationSeconds;
+    
     return {
-      requests: duration.values.count,
+      requests: requestCount,
       duration_avg: duration.values.avg,
       duration_med: duration.values.med,
       duration_p95: duration.values['p(95)'],
@@ -116,7 +130,7 @@ export function handleSummary(data) {
       duration_min: duration.values.min,
       duration_max: duration.values.max,
       error_rate: errors ? errors.values.rate : 0,
-      rps: duration.values.rate,
+      rps: rps,
     };
   };
   
@@ -125,9 +139,15 @@ export function handleSummary(data) {
   const fastifyUndiciMetrics = getMetrics('fastify_undici') || {};
   
   // Calculate improvements
-  const calcImprovement = (std, und) => {
-    if (!std || !und || std === 0) return 'N/A';
-    return ((std - und) / std * 100).toFixed(2);
+  const calcImprovement = (baseline, improved) => {
+    if (!baseline || !improved || baseline === 0) return 'N/A';
+    return ((baseline - improved) / baseline * 100).toFixed(2);
+  };
+  
+  // Calculate throughput improvements (higher is better)
+  const calcThroughputImprovement = (baseline, improved) => {
+    if (!baseline || !improved || baseline === 0) return 'N/A';
+    return (((improved - baseline) / baseline) * 100).toFixed(2);
   };
   
   // Helper to determine winner
@@ -151,7 +171,7 @@ export function handleSummary(data) {
   const csv = [
     'Metric,Express+Axios (Baseline),Fastify+Axios,Fastify+Undici,Fastify+Axios vs Express+Axios (%),Fastify+Undici vs Express+Axios (%),Fastify+Undici vs Fastify+Axios (%),Winner',
     `Total Requests,${expressAxiosMetrics.requests || 0},${fastifyAxiosMetrics.requests || 0},${fastifyUndiciMetrics.requests || 0},,,,`,
-    `Throughput (req/s),${(expressAxiosMetrics.rps || 0).toFixed(2)},${(fastifyAxiosMetrics.rps || 0).toFixed(2)},${(fastifyUndiciMetrics.rps || 0).toFixed(2)},${calcImprovement(fastifyAxiosMetrics.rps, expressAxiosMetrics.rps)},${calcImprovement(fastifyUndiciMetrics.rps, expressAxiosMetrics.rps)},${calcImprovement(fastifyUndiciMetrics.rps, fastifyAxiosMetrics.rps)},${getWinner({express: expressAxiosMetrics.rps, fastify: fastifyAxiosMetrics.rps, undici: fastifyUndiciMetrics.rps}, (a, b) => a > b)}`,
+    `Throughput (req/s),${(expressAxiosMetrics.rps || 0).toFixed(2)},${(fastifyAxiosMetrics.rps || 0).toFixed(2)},${(fastifyUndiciMetrics.rps || 0).toFixed(2)},${calcThroughputImprovement(expressAxiosMetrics.rps, fastifyAxiosMetrics.rps)},${calcThroughputImprovement(expressAxiosMetrics.rps, fastifyUndiciMetrics.rps)},${calcThroughputImprovement(fastifyAxiosMetrics.rps, fastifyUndiciMetrics.rps)},${getWinner({express: expressAxiosMetrics.rps, fastify: fastifyAxiosMetrics.rps, undici: fastifyUndiciMetrics.rps}, (a, b) => a > b)}`,
     `Avg Response Time (ms),${(expressAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_avg || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_avg, fastifyAxiosMetrics.duration_avg)},${calcImprovement(expressAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg)},${calcImprovement(fastifyAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg)},${getWinner({express: expressAxiosMetrics.duration_avg, fastify: fastifyAxiosMetrics.duration_avg, undici: fastifyUndiciMetrics.duration_avg}, (a, b) => a < b)}`,
     `Median Response Time (ms),${(expressAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_med || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_med, fastifyAxiosMetrics.duration_med)},${calcImprovement(expressAxiosMetrics.duration_med, fastifyUndiciMetrics.duration_med)},${calcImprovement(fastifyAxiosMetrics.duration_med, fastifyUndiciMetrics.duration_med)},${getWinner({express: expressAxiosMetrics.duration_med, fastify: fastifyAxiosMetrics.duration_med, undici: fastifyUndiciMetrics.duration_med}, (a, b) => a < b)}`,
     `P95 Response Time (ms),${(expressAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_p95 || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_p95, fastifyAxiosMetrics.duration_p95)},${calcImprovement(expressAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95)},${calcImprovement(fastifyAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95)},${getWinner({express: expressAxiosMetrics.duration_p95, fastify: fastifyAxiosMetrics.duration_p95, undici: fastifyUndiciMetrics.duration_p95}, (a, b) => a < b)}`,
@@ -177,19 +197,19 @@ export function handleSummary(data) {
     },
     comparison: {
       fastify_axios_vs_express_axios: {
-        throughput_improvement: calcImprovement(fastifyAxiosMetrics.rps, expressAxiosMetrics.rps) + '%',
+        throughput_improvement: calcThroughputImprovement(expressAxiosMetrics.rps, fastifyAxiosMetrics.rps) + '%',
         avg_response_improvement: calcImprovement(expressAxiosMetrics.duration_avg, fastifyAxiosMetrics.duration_avg) + '%',
         p95_response_improvement: calcImprovement(expressAxiosMetrics.duration_p95, fastifyAxiosMetrics.duration_p95) + '%',
         p99_response_improvement: calcImprovement(expressAxiosMetrics.duration_p99, fastifyAxiosMetrics.duration_p99) + '%',
       },
       fastify_undici_vs_express_axios: {
-        throughput_improvement: calcImprovement(fastifyUndiciMetrics.rps, expressAxiosMetrics.rps) + '%',
+        throughput_improvement: calcThroughputImprovement(expressAxiosMetrics.rps, fastifyUndiciMetrics.rps) + '%',
         avg_response_improvement: calcImprovement(expressAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg) + '%',
         p95_response_improvement: calcImprovement(expressAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95) + '%',
         p99_response_improvement: calcImprovement(expressAxiosMetrics.duration_p99, fastifyUndiciMetrics.duration_p99) + '%',
       },
       fastify_undici_vs_fastify_axios: {
-        throughput_improvement: calcImprovement(fastifyUndiciMetrics.rps, fastifyAxiosMetrics.rps) + '%',
+        throughput_improvement: calcThroughputImprovement(fastifyAxiosMetrics.rps, fastifyUndiciMetrics.rps) + '%',
         avg_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg) + '%',
         p95_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95) + '%',
         p99_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_p99, fastifyUndiciMetrics.duration_p99) + '%',

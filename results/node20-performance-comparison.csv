@@ -1,10 +1,10 @@
 Metric,Express+Axios (Baseline),Fastify+Axios,Fastify+Undici,Fastify+Axios vs Express+Axios (%),Fastify+Undici vs Express+Axios (%),Fastify+Undici vs Fastify+Axios (%),Winner
-Total Requests,0,0,0,,,,
-Throughput (req/s),0.00,0.00,0.00,N/A,N/A,N/A,N/A
-Avg Response Time (ms),31.33,26.28,9.95,16.13,68.23,62.12,Fastify+Undici
-Median Response Time (ms),25.05,20.44,7.50,18.42,70.05,63.28,Fastify+Undici
-P95 Response Time (ms),67.46,57.52,19.02,14.74,71.80,66.93,Fastify+Undici
+Total Requests,136609,174703,435290,,,,
+Throughput (req/s),1951.56,2495.76,6218.43,27.89,218.64,149.16,Fastify+Undici
+Avg Response Time (ms),32.80,25.63,10.27,21.88,68.68,59.91,Fastify+Undici
+Median Response Time (ms),27.44,21.42,8.63,21.93,68.56,59.73,Fastify+Undici
+P95 Response Time (ms),62.78,47.34,17.70,24.59,71.81,62.62,Fastify+Undici
 P99 Response Time (ms),0.00,0.00,0.00,N/A,N/A,N/A,N/A
-Min Response Time (ms),0.55,0.53,0.22,,,,
-Max Response Time (ms),204.68,187.55,69.48,8.37,66.05,62.95,Fastify+Undici
+Min Response Time (ms),0.58,0.53,0.27,,,,
+Max Response Time (ms),203.58,154.09,77.31,24.31,62.03,49.83,Fastify+Undici
 Error Rate (%),0.00,0.00,0.00,,,Express+Axios

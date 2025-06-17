@@ -156,26 +156,27 @@ With 5 parallel HTTP requests per endpoint call, tested across Node.js versions:
 
 | Node Version | Configuration | Avg Response (ms) | P95 (ms) | vs Express+Axios |
 |--------------|---------------|-------------------|----------|------------------|
-| **Node 20** | Express + Axios | 31.33 | 67.46 | baseline |
-| **Node 20** | Fastify + Axios | 26.28 | 57.52 | 16.13% faster |
-| **Node 20** | Fastify + Undici | 9.95 | 19.02 | **68.23% faster** |
-| **Node 22** | Express + Axios | 31.44 | 56.22 | baseline |
-| **Node 22** | Fastify + Axios | 28.43 | 54.46 | 9.60% faster |
-| **Node 22** | Fastify + Undici | 10.74 | 16.90 | **65.85% faster** |
-| **Node 24** | Express + Axios | 33.78 | 61.89 | baseline |
-| **Node 24** | Fastify + Axios | 34.08 | 61.43 | -0.88% slower |
-| **Node 24** | Fastify + Undici | 9.51 | 16.28 | **71.84% faster** |
+| **Node 20** | Express + Axios | 32.80 | 62.78 | baseline |
+| **Node 20** | Fastify + Axios | 25.63 | 47.34 | 21.88% faster |
+| **Node 20** | Fastify + Undici | 10.27 | 17.70 | **68.68% faster** |
+| **Node 22** | Express + Axios | 37.95 | 90.59 | baseline |
+| **Node 22** | Fastify + Axios | 29.79 | 56.38 | 21.49% faster |
+| **Node 22** | Fastify + Undici | 11.19 | 18.59 | **70.52% faster** |
+| **Node 24** | Express + Axios | 36.72 | 64.64 | baseline |
+| **Node 24** | Fastify + Axios | 35.25 | 64.02 | 4.01% faster |
+| **Node 24** | Fastify + Undici | 10.66 | 17.85 | **70.97% faster** |
 
 ### Key Findings
 
-- **Undici consistently delivers 60-72% better performance** than standard HTTP client across all Node.js versions
-- **Framework impact varies**: Fastify shows 9-16% improvement over Express in Node 20-22, but minimal difference in Node 24
-- **HTTP client choice matters more than framework**: Switching to Undici provides 62-72% improvement even with the same Fastify framework
-- **Best configuration**: Fastify + Undici achieves sub-10ms average response times on Node 20 and 24
-- **Most consistent P95 performance**: Undici maintains 16-19ms P95 across all Node versions
+- **Undici consistently delivers 60-70% better performance** than standard HTTP client across all Node.js versions
+- **Framework impact varies**: Fastify shows ~22% improvement over Express in Node 20-22, but only 4% in Node 24
+- **HTTP client choice matters more than framework**: Switching to Undici provides 60-70% improvement even with the same Fastify framework
+- **Best configuration**: Fastify + Undici achieves ~10-11ms average response times across all Node versions
+- **Most consistent P95 performance**: Undici maintains 17-19ms P95 across all Node versions
+- **Throughput improvements**: Undici delivers 219-243% higher throughput compared to Express+Axios
 - All configurations maintain near-zero error rates under load
 
-**Conclusion:** For maximum performance in NestJS applications, use the Undici HTTP client. The choice of HTTP client (Undici vs Axios) has a much larger impact on performance (60-72% improvement) than the choice of server framework (Fastify vs Express, 0-16% improvement).
+**Conclusion:** For maximum performance in NestJS applications, use the Undici HTTP client. The choice of HTTP client (Undici vs Axios) has a much larger impact on performance (60-70% improvement) than the choice of server framework (Fastify vs Express, 4-22% improvement).
 
 ## 🏗️ Architecture
 
