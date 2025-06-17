@@ -19,7 +19,7 @@ jobs:
     strategy:
       matrix:
         node-version: [20, 22, 24]
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,12 +27,12 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # Use Node 20 for running scripts, Docker will use matrix version
+          node-version: '22'  # Use Node 22 for running scripts, Docker will use matrix version
           cache: 'npm'
 
       - name: Install dependencies
         run: |
-          npm ci
+          npm i
           brew install k6
 
       - name: Setup Docker
@@ -40,7 +40,7 @@ jobs:
           brew install --cask docker
           echo "Waiting for Docker to start..."
           open --background -a Docker
-          
+
           # Wait for Docker to be ready
           COUNTER=0
           while ! docker system info > /dev/null 2>&1; do
@@ -62,10 +62,10 @@ jobs:
           else
             COMPOSE_FILE="docker-compose-node${{ matrix.node-version }}.yml"
           fi
-          
+
           echo "Using $COMPOSE_FILE for Node.js ${{ matrix.node-version }}"
           docker-compose -f $COMPOSE_FILE up -d --build
-          
+
           # Wait for services to be healthy
           echo "Waiting for services to be healthy..."
           COUNTER=0
@@ -80,7 +80,7 @@ jobs:
               break
             fi
           done
-          
+
           if [ $COUNTER -ge 60 ]; then
             echo "Services failed to become healthy"
             docker-compose -f $COMPOSE_FILE logs
@@ -126,7 +126,7 @@ jobs:
     needs: performance-test
     runs-on: macos-latest
     if: always()
-    
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -144,12 +144,12 @@ jobs:
       - name: Consolidate results
         run: |
           mkdir -p consolidated-results
-          
+
           # Copy all results to consolidated directory
           find artifacts -name "*.csv" -o -name "*.json" -o -name "*.md" | while read file; do
             cp "$file" consolidated-results/
           done
-          
+
           # List all results
           echo "=== Consolidated Performance Test Results ==="
           ls -la consolidated-results/
@@ -168,19 +168,19 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             // Read the performance comparison report
             let reportContent = '';
             const reportPath = 'consolidated-results/PERFORMANCE-COMPARISON-REPORT.md';
-            
+
             if (fs.existsSync(reportPath)) {
               reportContent = fs.readFileSync(reportPath, 'utf8');
-              
+
               // Truncate if too long for PR comment
               if (reportContent.length > 65000) {
                 reportContent = reportContent.substring(0, 65000) + '\n\n... (truncated)';
               }
-              
+
               // Create PR comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
