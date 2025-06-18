@@ -143,7 +143,7 @@ get_container_logs() {
     echo ""
     echo "Logs for $SERVICE_NAME:"
     echo "----------------------------------------"
-    docker-compose -f $COMPOSE_FILE logs --tail=50 $SERVICE_NAME 2>&1
+    docker compose -f $COMPOSE_FILE logs --tail=50 $SERVICE_NAME 2>&1
 }
 
 # Function to run test for a specific Node version
@@ -159,11 +159,11 @@ run_node_test() {
     
     # Stop any running containers
     echo "Stopping existing containers..."
-    docker-compose -f $COMPOSE_FILE down --remove-orphans
+    docker compose -f $COMPOSE_FILE down --remove-orphans
     
     # Start containers
     echo "Starting containers with Node.js $NODE_VERSION..."
-    docker-compose -f $COMPOSE_FILE up --build -d
+    docker compose -f $COMPOSE_FILE up --build -d
     
     # Wait a bit for containers to initialize
     echo "Waiting for containers to initialize..."
@@ -173,15 +173,15 @@ run_node_test() {
     if ! check_all_services $NODE_VERSION $K6_SCRIPT; then
         echo -e "${YELLOW}Warning: Not all services are healthy. Checking logs...${NC}"
         
-        # Get container names from docker-compose
+        # Get container names from docker compose
         echo ""
         echo "Container statuses:"
-        docker-compose -f $COMPOSE_FILE ps
+        docker compose -f $COMPOSE_FILE ps
         
         # Get logs for all services
         echo ""
         echo "Getting logs for all services..."
-        docker-compose -f $COMPOSE_FILE logs --tail=50
+        docker compose -f $COMPOSE_FILE logs --tail=50
         
         echo ""
         echo -e "${YELLOW}Attempting to continue with test despite unhealthy services...${NC}"
@@ -192,7 +192,7 @@ run_node_test() {
         echo
         if [[ ! $REPLY =~ ^[Yy]$ ]]; then
             echo "Skipping test for Node.js $NODE_VERSION"
-            docker-compose -f $COMPOSE_FILE down
+            docker compose -f $COMPOSE_FILE down
             return 1
         fi
     fi
@@ -208,7 +208,7 @@ run_node_test() {
     
     # Stop containers
     echo "Stopping containers..."
-    docker-compose -f $COMPOSE_FILE down
+    docker compose -f $COMPOSE_FILE down
     
     echo ""
     return 0
@@ -219,17 +219,17 @@ echo "Starting comprehensive performance tests..."
 echo ""
 
 # Test with Node.js 20 (default)
-if ! run_node_test "20" "docker-compose.yml" "k6-scripts/test-node20.js"; then
+if ! run_node_test "20" "docker compose.yml" "k6-scripts/test-node20.js"; then
     echo -e "${RED}Node.js 20 test failed or was skipped${NC}"
 fi
 
 # Test with Node.js 22
-if ! run_node_test "22" "docker-compose-node22.yml" "k6-scripts/test-node22.js"; then
+if ! run_node_test "22" "docker compose-node22.yml" "k6-scripts/test-node22.js"; then
     echo -e "${RED}Node.js 22 test failed or was skipped${NC}"
 fi
 
 # Test with Node.js 24
-if ! run_node_test "24" "docker-compose-node24.yml" "k6-scripts/test-node24.js"; then
+if ! run_node_test "24" "docker compose-node24.yml" "k6-scripts/test-node24.js"; then
     echo -e "${RED}Node.js 24 test failed or was skipped${NC}"
 fi
 

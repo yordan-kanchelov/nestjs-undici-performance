@@ -44,7 +44,7 @@ jobs:
       - name: Verify Docker is available
         run: |
           docker --version
-          docker-compose --version
+          docker compose version || docker-compose --version
           docker system info
 
       - name: Build and start services for Node ${{ matrix.node-version }}
@@ -57,25 +57,25 @@ jobs:
           fi
 
           echo "Using $COMPOSE_FILE for Node.js ${{ matrix.node-version }}"
-          docker-compose -f $COMPOSE_FILE up -d --build
+          docker compose -f $COMPOSE_FILE up -d --build
 
           # Wait for services to be healthy
           echo "Waiting for services to be healthy..."
           COUNTER=0
           while [ $COUNTER -lt 60 ]; do
-            if docker-compose -f $COMPOSE_FILE ps | grep -E "(unhealthy|starting)" > /dev/null; then
+            if docker compose -f $COMPOSE_FILE ps | grep -E "(unhealthy|starting)" > /dev/null; then
               echo "Services still starting... ($COUNTER/60)"
               sleep 5
               COUNTER=$((COUNTER + 5))
             else
               echo "All services are ready!"
-              docker-compose -f $COMPOSE_FILE ps
+              docker compose -f $COMPOSE_FILE ps
               break
             fi
           done
           if [ $COUNTER -ge 60 ]; then
             echo "Services failed to become healthy"
-            docker-compose -f $COMPOSE_FILE logs
+            docker compose -f $COMPOSE_FILE logs
             exit 1
           fi
 
@@ -109,9 +109,9 @@ jobs:
         if: always()
         run: |
           if [ "${{ matrix.node-version }}" = "20" ]; then
-            docker-compose down
+            docker compose down
           else
-            docker-compose -f docker-compose-node${{ matrix.node-version }}.yml down
+            docker compose -f docker-compose-node${{ matrix.node-version }}.yml down
           fi
 
   consolidate-results:
