@@ -26,55 +26,55 @@ This report compares the performance of three HTTP module configurations in Nest
 ### Node.js 20 (LTS)
 
 #### Response Time Improvements
-- **Framework Impact (Fastify+Axios vs Express+Axios)**: 21.88%
-- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 59.91%
-- **Combined Impact (Fastify+Undici vs Express+Axios)**: 68.68%
+- **Framework Impact (Fastify+Axios vs Express+Axios)**: 18.69%
+- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 63.55%
+- **Combined Impact (Fastify+Undici vs Express+Axios)**: 70.36%
 
 #### Average Response Times
-- **Express + Axios (Baseline)**: 32.80ms
-- **Fastify + Axios**: 25.63ms
-- **Fastify + Undici**: 10.27ms
+- **Express + Axios (Baseline)**: 30.05ms
+- **Fastify + Axios**: 24.44ms
+- **Fastify + Undici**: 8.91ms
 
 #### Throughput Improvements
-- **Fastify+Axios vs Express+Axios**: 27.89%
-- **Fastify+Undici vs Fastify+Axios**: 149.16%
-- **Fastify+Undici vs Express+Axios**: 218.64%
+- **Fastify+Axios vs Express+Axios**: 22.78%
+- **Fastify+Undici vs Fastify+Axios**: 174.34%
+- **Fastify+Undici vs Express+Axios**: 236.84%
 
 
 ### Node.js 22
 
 #### Response Time Improvements
-- **Framework Impact (Fastify+Axios vs Express+Axios)**: 21.49%
-- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 62.46%
-- **Combined Impact (Fastify+Undici vs Express+Axios)**: 70.52%
+- **Framework Impact (Fastify+Axios vs Express+Axios)**: 7.43%
+- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 64.22%
+- **Combined Impact (Fastify+Undici vs Express+Axios)**: 66.88%
 
 #### Average Response Times
-- **Express + Axios (Baseline)**: 37.95ms
-- **Fastify + Axios**: 29.79ms
-- **Fastify + Undici**: 11.19ms
+- **Express + Axios (Baseline)**: 30.33ms
+- **Fastify + Axios**: 28.08ms
+- **Fastify + Undici**: 10.05ms
 
 #### Throughput Improvements
-- **Fastify+Axios vs Express+Axios**: 27.33%
-- **Fastify+Undici vs Fastify+Axios**: 165.75%
-- **Fastify+Undici vs Express+Axios**: 238.37%
+- **Fastify+Axios vs Express+Axios**: 8.01%
+- **Fastify+Undici vs Fastify+Axios**: 179.26%
+- **Fastify+Undici vs Express+Axios**: 201.63%
 
 
 ### Node.js 24
 
 #### Response Time Improvements
-- **Framework Impact (Fastify+Axios vs Express+Axios)**: 4.01%
-- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 69.75%
-- **Combined Impact (Fastify+Undici vs Express+Axios)**: 70.97%
+- **Framework Impact (Fastify+Axios vs Express+Axios)**: 1.57%
+- **HTTP Client Impact (Fastify+Undici vs Fastify+Axios)**: 71.43%
+- **Combined Impact (Fastify+Undici vs Express+Axios)**: 71.87%
 
 #### Average Response Times
-- **Express + Axios (Baseline)**: 36.72ms
-- **Fastify + Axios**: 35.25ms
-- **Fastify + Undici**: 10.66ms
+- **Express + Axios (Baseline)**: 34.94ms
+- **Fastify + Axios**: 34.39ms
+- **Fastify + Undici**: 9.83ms
 
 #### Throughput Improvements
-- **Fastify+Axios vs Express+Axios**: 4.19%
-- **Fastify+Undici vs Fastify+Axios**: 229.43%
-- **Fastify+Undici vs Express+Axios**: 243.22%
+- **Fastify+Axios vs Express+Axios**: 1.60%
+- **Fastify+Undici vs Fastify+Axios**: 248.98%
+- **Fastify+Undici vs Express+Axios**: 254.57%
 
 
 ## Detailed Comparison Tables
@@ -82,34 +82,34 @@ This report compares the performance of three HTTP module configurations in Nest
 ### Average Response Time (ms)
 | Node Version | Express+Axios (Baseline) | Fastify+Axios | Fastify+Undici | Fastify+Axios vs Express+Axios | Fastify+Undici vs Express+Axios | Fastify+Undici vs Fastify+Axios |
 |--------------|-------------------------|---------------|----------------|--------------------------------|----------------------------------|----------------------------------|
-| Node 20 | 32.80 | 25.63 | 10.27 | 21.88% | 68.68% | 59.91% |
-| Node 22 | 37.95 | 29.79 | 11.19 | 21.49% | 70.52% | 62.46% |
-| Node 24 | 36.72 | 35.25 | 10.66 | 4.01% | 70.97% | 69.75% |
+| Node 20 | 30.05 | 24.44 | 8.91 | 18.69% | 70.36% | 63.55% |
+| Node 22 | 30.33 | 28.08 | 10.05 | 7.43% | 66.88% | 64.22% |
+| Node 24 | 34.94 | 34.39 | 9.83 | 1.57% | 71.87% | 71.43% |
 
 ### P95 Response Time (ms)
 | Node Version | Express+Axios | Fastify+Axios | Fastify+Undici |
 |--------------|---------------|---------------|----------------|
-| Node 20 | 62.78 | 47.34 | 17.70 |
-| Node 22 | 90.59 | 56.38 | 18.59 |
-| Node 24 | 64.64 | 64.02 | 17.85 |
+| Node 20 | 55.25 | 47.29 | 15.53 |
+| Node 22 | 55.62 | 56.02 | 17.71 |
+| Node 24 | 61.75 | 65.76 | 17.03 |
 
 ### Throughput (requests/second)
 | Node Version | Express+Axios | Fastify+Axios | Fastify+Undici | Fastify+Axios vs Express+Axios | Fastify+Undici vs Express+Axios | Fastify+Undici vs Fastify+Axios |
 |--------------|---------------|---------------|----------------|--------------------------------|----------------------------------|----------------------------------|
-| Node 20 | 1951.56 | 2495.76 | 6218.43 | 27.89% | 218.64% | 149.16% |
-| Node 22 | 1688.49 | 2149.90 | 5713.39 | 27.33% | 238.37% | 165.75% |
-| Node 24 | 1746.37 | 1819.46 | 5993.83 | 4.19% | 243.22% | 229.43% |
+| Node 20 | 2128.33 | 2613.21 | 7169.01 | 22.78% | 236.84% | 174.34% |
+| Node 22 | 2108.59 | 2277.50 | 6360.23 | 8.01% | 201.63% | 179.26% |
+| Node 24 | 1833.24 | 1862.60 | 6500.14 | 1.60% | 254.57% | 248.98% |
 
 ### HTTP Client Comparison (Fastify Framework Only)
 | Node Version | Fastify+Axios | Fastify+Undici | Improvement (%) |
 |--------------|---------------|----------------|------------------|
-| Node 20 | 25.63ms | 10.27ms | 59.91% |
-| Node 22 | 29.79ms | 11.19ms | 62.46% |
-| Node 24 | 35.25ms | 10.66ms | 69.75% |
+| Node 20 | 24.44ms | 8.91ms | 63.55% |
+| Node 22 | 28.08ms | 10.05ms | 64.22% |
+| Node 24 | 34.39ms | 9.83ms | 71.43% |
 
 ## Test Environment
 
 - **Machine**: Local Docker containers
 - **Network**: Docker bridge network
 - **Test Tool**: k6 load testing framework
-- **Date**: 2025-06-16
+- **Date**: 2025-06-18

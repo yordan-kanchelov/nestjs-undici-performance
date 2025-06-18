@@ -1,7 +1,7 @@
 {
   "test_info": {
     "node_version": "Node.js 20",
-    "timestamp": "2025-06-16T16:43:25.582Z",
+    "timestamp": "2025-06-18T16:37:31.950Z",
     "duration_seconds": 220,
     "scenarios": [
       "express_axios",
@@ -12,53 +12,53 @@
   },
   "results": {
     "express_axios": {
-      "requests": 136609,
-      "duration_avg": 32.80351882379615,
-      "duration_med": 27.441,
-      "duration_p95": 62.77619999999999,
-      "duration_min": 0.578,
-      "duration_max": 203.58,
+      "requests": 148983,
+      "duration_avg": 30.054696039145313,
+      "duration_med": 25.832,
+      "duration_p95": 55.251,
+      "duration_min": 0.559,
+      "duration_max": 357.444,
       "error_rate": 0,
-      "rps": 1951.557142857143
+      "rps": 2128.3285714285716
     },
     "fastify_axios": {
-      "requests": 174703,
-      "duration_avg": 25.627129814599314,
-      "duration_med": 21.423,
-      "duration_p95": 47.33989999999999,
-      "duration_min": 0.525,
-      "duration_max": 154.093,
+      "requests": 182925,
+      "duration_avg": 24.43633353560191,
+      "duration_med": 19.541,
+      "duration_p95": 47.29079999999999,
+      "duration_min": 0.503,
+      "duration_max": 191.878,
       "error_rate": 0,
-      "rps": 2495.7571428571428
+      "rps": 2613.214285714286
     },
     "fastify_undici": {
-      "requests": 435290,
-      "duration_avg": 10.273081099956467,
-      "duration_med": 8.628,
-      "duration_p95": 17.696,
-      "duration_min": 0.271,
-      "duration_max": 77.305,
+      "requests": 501831,
+      "duration_avg": 8.908013369042457,
+      "duration_med": 7.496,
+      "duration_p95": 15.532,
+      "duration_min": 0.219,
+      "duration_max": 46.736,
       "error_rate": 0,
-      "rps": 6218.428571428572
+      "rps": 7169.0142857142855
     }
   },
   "comparison": {
     "fastify_axios_vs_express_axios": {
-      "throughput_improvement": "27.89%",
-      "avg_response_improvement": "21.88%",
-      "p95_response_improvement": "24.59%",
+      "throughput_improvement": "22.78%",
+      "avg_response_improvement": "18.69%",
+      "p95_response_improvement": "14.41%",
       "p99_response_improvement": "N/A%"
     },
     "fastify_undici_vs_express_axios": {
-      "throughput_improvement": "218.64%",
-      "avg_response_improvement": "68.68%",
-      "p95_response_improvement": "71.81%",
+      "throughput_improvement": "236.84%",
+      "avg_response_improvement": "70.36%",
+      "p95_response_improvement": "71.89%",
       "p99_response_improvement": "N/A%"
     },
     "fastify_undici_vs_fastify_axios": {
-      "throughput_improvement": "149.16%",
-      "avg_response_improvement": "59.91%",
-      "p95_response_improvement": "62.62%",
+      "throughput_improvement": "174.34%",
+      "avg_response_improvement": "63.55%",
+      "p95_response_improvement": "67.16%",
       "p99_response_improvement": "N/A%"
     }
   }
