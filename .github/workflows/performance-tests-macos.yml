@@ -37,15 +37,42 @@ jobs:
       - name: Setup Docker
         run: |
           brew install --cask docker
-          echo "Waiting for Docker to start..."
-          open --background -a Docker
-          # Wait for Docker to be ready
+          echo "Waiting for Docker app to be available..."
+          # Give macOS time to register the new application
+          sleep 10
+          
+          # Try to open Docker, retry if needed
+          RETRY_COUNT=0
+          while [ $RETRY_COUNT -lt 3 ]; do
+            if open --background -a Docker 2>/dev/null; then
+              echo "Docker app opened successfully"
+              break
+            else
+              echo "Attempt $((RETRY_COUNT + 1)) failed, retrying..."
+              sleep 5
+              RETRY_COUNT=$((RETRY_COUNT + 1))
+            fi
+          done
+          
+          if [ $RETRY_COUNT -eq 3 ]; then
+            echo "Failed to open Docker app, trying alternative approach..."
+            # Try opening by full path
+            if [ -d "/Applications/Docker.app" ]; then
+              open --background "/Applications/Docker.app"
+            else
+              echo "Docker.app not found in /Applications"
+              exit 1
+            fi
+          fi
+          
+          # Wait for Docker daemon to be ready
+          echo "Waiting for Docker daemon to start..."
           COUNTER=0
           while ! docker system info > /dev/null 2>&1; do
-            echo "Waiting for Docker to be ready... ($COUNTER/60)"
+            echo "Waiting for Docker to be ready... ($COUNTER/90)"
             sleep 5
             COUNTER=$((COUNTER + 5))
-            if [ $COUNTER -gt 60 ]; then
+            if [ $COUNTER -gt 90 ]; then
               echo "Docker failed to start"
               exit 1
             fi
