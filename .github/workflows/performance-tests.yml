@@ -1,4 +1,4 @@
-name: Performance Tests on macOS
+name: Performance Tests
 
 on:
   push:
@@ -15,7 +15,7 @@ on:
 
 jobs:
   performance-test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [20, 22, 24]
@@ -32,52 +32,20 @@ jobs:
       - name: Install dependencies
         run: |
           npm i
-          brew install k6
-
-      - name: Setup Docker
+          
+      - name: Install k6
         run: |
-          brew install --cask docker
-          echo "Waiting for Docker app to be available..."
-          # Give macOS time to register the new application
-          sleep 10
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
           
-          # Try to open Docker, retry if needed
-          RETRY_COUNT=0
-          while [ $RETRY_COUNT -lt 3 ]; do
-            if open --background -a Docker 2>/dev/null; then
-              echo "Docker app opened successfully"
-              break
-            else
-              echo "Attempt $((RETRY_COUNT + 1)) failed, retrying..."
-              sleep 5
-              RETRY_COUNT=$((RETRY_COUNT + 1))
-            fi
-          done
-          
-          if [ $RETRY_COUNT -eq 3 ]; then
-            echo "Failed to open Docker app, trying alternative approach..."
-            # Try opening by full path
-            if [ -d "/Applications/Docker.app" ]; then
-              open --background "/Applications/Docker.app"
-            else
-              echo "Docker.app not found in /Applications"
-              exit 1
-            fi
-          fi
-          
-          # Wait for Docker daemon to be ready
-          echo "Waiting for Docker daemon to start..."
-          COUNTER=0
-          while ! docker system info > /dev/null 2>&1; do
-            echo "Waiting for Docker to be ready... ($COUNTER/90)"
-            sleep 5
-            COUNTER=$((COUNTER + 5))
-            if [ $COUNTER -gt 90 ]; then
-              echo "Docker failed to start"
-              exit 1
-            fi
-          done
-          echo "Docker is ready"
+      - name: Verify Docker is available
+        run: |
+          docker --version
+          docker-compose --version
+          docker system info
 
       - name: Build and start services for Node ${{ matrix.node-version }}
         run: |
@@ -148,7 +116,7 @@ jobs:
 
   consolidate-results:
     needs: performance-test
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Checkout code
