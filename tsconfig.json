@@ -1,19 +1,15 @@
 {
   "extends": "./tsconfig.base.json",
-  "compileOnSave": false,
-  "files": [],
-  "references": [
-    {
-      "path": "./apps/mock-service"
-    },
-    {
-      "path": "./apps/nestjs-fastify-undici"
-    },
-    {
-      "path": "./apps/nestjs-fastify-axios"
-    },
-    {
-      "path": "./apps/nestjs-express-axios"
-    }
+  "compilerOptions": {
+    "noEmit": true
+  },
+  "include": [
+    "apps/*/src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.spec.ts",
+    "**/*.test.ts"
   ]
 }

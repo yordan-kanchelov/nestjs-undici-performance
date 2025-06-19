@@ -1,14 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
+    "outDir": "../../dist/apps/mock-service",
     "types": ["node"],
-    "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
-    "emitDeclarationOnly": false,
-    "noEmit": false,
-    "isolatedModules": false
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
-  "exclude": ["**/*.spec.ts", "**/*.test.ts", "../nestjs-*/**/*"]
+  "exclude": ["**/*.spec.ts", "**/*.test.ts"]
 }
