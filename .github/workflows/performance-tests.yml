@@ -14,7 +14,7 @@ on:
         type: string
 
 permissions:
-  contents: read
+  contents: write
   pull-requests: write
   issues: write
 
@@ -126,6 +126,9 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -154,6 +157,33 @@ jobs:
           name: all-performance-results
           path: consolidated-results/
           retention-days: 30
+      
+      - name: Commit results to repository (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Copy results to the results directory
+          cp -r consolidated-results/* results/
+          
+          # Add timestamp to the report
+          DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          echo -e "\n\n---\n*Last updated: $DATE*" >> results/PERFORMANCE-COMPARISON-REPORT.md
+          
+          # Check if there are changes
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add results/
+            git commit -m "chore: Update performance test results [skip ci]
+            
+            Performance tests run: ${{ github.run_number }}
+            Commit: ${{ github.sha }}"
+            
+            git push origin main
+          fi
 
       - name: Comment PR with results (if PR)
         if: github.event_name == 'pull_request'
