@@ -8,7 +8,7 @@ export class AppService {
 
   async getData(): Promise<any> {
     const mockServiceUrl = process.env.MOCK_SERVICE_URL || 'http://localhost:3001/api/data';
-    
+
     const requests = [
       lastValueFrom(this.httpService.request(mockServiceUrl)),
       lastValueFrom(this.httpService.request(mockServiceUrl)),

@@ -1,11 +1,10 @@
 {
   "extends": "../../tsconfig.base.json",
   "compilerOptions": {
-    "outDir": "dist",
+    "outDir": "../../dist/apps/mock-service",
     "types": ["node"],
-    "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
+    "rootDir": "src"
   },
   "include": ["src/**/*.ts"],
-  "exclude": []
+  "exclude": ["**/*.spec.ts", "**/*.test.ts"]
 }

@@ -2,7 +2,10 @@
   "name": "@test/source",
   "version": "0.0.0",
   "license": "MIT",
-  "scripts": {},
+  "scripts": {
+    "typecheck": "./typecheck.sh",
+    "serve:all": "nx run-many --target=serve --all --parallel"
+  },
   "private": true,
   "devDependencies": {
     "@nestjs/schematics": "^11.0.0",

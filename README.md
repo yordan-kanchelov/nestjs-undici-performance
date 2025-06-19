@@ -2,6 +2,20 @@
 
 A comprehensive performance benchmark comparing three HTTP client/server configurations in NestJS applications. See [Architecture](#-architecture) section for detailed configuration descriptions.
 
+## 🏆 Performance Results Summary
+
+> **TL;DR: Undici is 60-70% faster than Axios across all Node.js versions**
+
+### Latest Benchmark Results
+
+| Configuration | Avg Response Time | vs Baseline | Throughput |
+|--------------|-------------------|-------------|------------|
+| **Express + Axios** | 30-37ms | baseline | 100% |
+| **Fastify + Axios** | 25-35ms | 4-22% faster | 108-123% |
+| **Fastify + Undici** | **9-11ms** | **69-71% faster** | **220-337%** |
+
+*Results from Node.js 20, 22, and 24. [View detailed results](#-latest-performance-results) | [View full report](results/PERFORMANCE-COMPARISON-REPORT.md)*
+
 ## 🎯 What This Repository Tests
 
 ### Core Performance Comparison

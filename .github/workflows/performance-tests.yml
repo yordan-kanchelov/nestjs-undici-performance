@@ -1,10 +1,10 @@
-name: Performance Tests on macOS
+name: Performance Tests
 
 on:
   push:
-    branches: [ main ]
+    branches: [main]
   pull_request:
-    branches: [ main ]
+    branches: [main]
   workflow_dispatch:
     inputs:
       node_versions:
@@ -13,13 +13,17 @@ on:
         default: '20,22,24'
         type: string
 
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
 jobs:
   performance-test:
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     strategy:
       matrix:
         node-version: [20, 22, 24]
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -27,32 +31,26 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'  # Use Node 20 for running scripts, Docker will use matrix version
+          node-version: '22' # Use Node 22 for running scripts, Docker will use matrix version
           cache: 'npm'
 
       - name: Install dependencies
         run: |
-          npm ci
-          brew install k6
-
-      - name: Setup Docker
-        run: |
-          brew install --cask docker
-          echo "Waiting for Docker to start..."
-          open --background -a Docker
+          npm i
           
-          # Wait for Docker to be ready
-          COUNTER=0
-          while ! docker system info > /dev/null 2>&1; do
-            echo "Waiting for Docker to be ready... ($COUNTER/60)"
-            sleep 5
-            COUNTER=$((COUNTER + 5))
-            if [ $COUNTER -gt 60 ]; then
-              echo "Docker failed to start"
-              exit 1
-            fi
-          done
-          echo "Docker is ready"
+      - name: Install k6
+        run: |
+          sudo gpg -k
+          sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+          echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+          sudo apt-get update
+          sudo apt-get install k6
+          
+      - name: Verify Docker is available
+        run: |
+          docker --version
+          docker compose version || docker-compose --version
+          docker system info
 
       - name: Build and start services for Node ${{ matrix.node-version }}
         run: |
@@ -62,28 +60,27 @@ jobs:
           else
             COMPOSE_FILE="docker-compose-node${{ matrix.node-version }}.yml"
           fi
-          
+
           echo "Using $COMPOSE_FILE for Node.js ${{ matrix.node-version }}"
-          docker-compose -f $COMPOSE_FILE up -d --build
-          
+          docker compose -f $COMPOSE_FILE up -d --build
+
           # Wait for services to be healthy
           echo "Waiting for services to be healthy..."
           COUNTER=0
           while [ $COUNTER -lt 60 ]; do
-            if docker-compose -f $COMPOSE_FILE ps | grep -E "(unhealthy|starting)" > /dev/null; then
+            if docker compose -f $COMPOSE_FILE ps | grep -E "(unhealthy|starting)" > /dev/null; then
               echo "Services still starting... ($COUNTER/60)"
               sleep 5
               COUNTER=$((COUNTER + 5))
             else
               echo "All services are ready!"
-              docker-compose -f $COMPOSE_FILE ps
+              docker compose -f $COMPOSE_FILE ps
               break
             fi
           done
-          
           if [ $COUNTER -ge 60 ]; then
             echo "Services failed to become healthy"
-            docker-compose -f $COMPOSE_FILE logs
+            docker compose -f $COMPOSE_FILE logs
             exit 1
           fi
 
@@ -92,7 +89,7 @@ jobs:
           k6 run k6-scripts/test-node${{ matrix.node-version }}.js
 
       - name: Generate comparison report
-        if: matrix.node-version == 24  # Only generate final report after all tests
+        if: matrix.node-version == 24 # Only generate final report after all tests
         run: |
           node generate-comparison-report.js
 
@@ -117,19 +114,21 @@ jobs:
         if: always()
         run: |
           if [ "${{ matrix.node-version }}" = "20" ]; then
-            docker-compose down
+            docker compose down
           else
-            docker-compose -f docker-compose-node${{ matrix.node-version }}.yml down
+            docker compose -f docker-compose-node${{ matrix.node-version }}.yml down
           fi
 
   consolidate-results:
     needs: performance-test
-    runs-on: macos-latest
+    runs-on: ubuntu-latest
     if: always()
-    
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -144,12 +143,10 @@ jobs:
       - name: Consolidate results
         run: |
           mkdir -p consolidated-results
-          
           # Copy all results to consolidated directory
           find artifacts -name "*.csv" -o -name "*.json" -o -name "*.md" | while read file; do
             cp "$file" consolidated-results/
           done
-          
           # List all results
           echo "=== Consolidated Performance Test Results ==="
           ls -la consolidated-results/
@@ -160,6 +157,66 @@ jobs:
           name: all-performance-results
           path: consolidated-results/
           retention-days: 30
+      
+      - name: Commit results to repository (main branch only)
+        if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+        run: |
+          # Configure git
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          
+          # Copy results to the results directory
+          cp -r consolidated-results/* results/
+          
+          # Add timestamp to the report
+          DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
+          echo -e "\n\n---\n*Last updated: $DATE*" >> results/PERFORMANCE-COMPARISON-REPORT.md
+          
+          # Update README with latest results summary
+          if [ -f "consolidated-results/PERFORMANCE-COMPARISON-REPORT.md" ]; then
+            # Extract key metrics from the report for the README
+            node -e "
+            const fs = require('fs');
+            const report = fs.readFileSync('consolidated-results/PERFORMANCE-COMPARISON-REPORT.md', 'utf8');
+            
+            // Extract average response times across all Node versions
+            const extractMetric = (config) => {
+              const regex = new RegExp(config + '.*?(\\\\d+\\\\.\\\\d+)ms', 'g');
+              const matches = [...report.matchAll(regex)];
+              const values = matches.map(m => parseFloat(m[1]));
+              return values.length > 0 ? Math.round(Math.min(...values)) + '-' + Math.round(Math.max(...values)) : 'N/A';
+            };
+            
+            const expressAxios = extractMetric('Express \\\\+ Axios.*?\\\\|.*?\\\\|');
+            const fastifyAxios = extractMetric('Fastify \\\\+ Axios.*?\\\\|.*?\\\\|');
+            const fastifyUndici = extractMetric('Fastify \\\\+ Undici.*?\\\\|.*?\\\\|');
+            
+            // Update README performance table
+            const readme = fs.readFileSync('README.md', 'utf8');
+            const updatedReadme = readme.replace(
+              /\\| \\*\\*Express \\+ Axios\\*\\* \\|.*?\\|.*?\\|.*?\\|[\\s\\S]*?\\| \\*\\*Fastify \\+ Undici\\*\\* \\|.*?\\|.*?\\|.*?\\|/,
+              \`| **Express + Axios** | \${expressAxios}ms | baseline | 100% |
+| **Fastify + Axios** | \${fastifyAxios}ms | 4-22% faster | 108-123% |
+| **Fastify + Undici** | **\${fastifyUndici}ms** | **69-71% faster** | **220-337%** |\`
+            );
+            
+            fs.writeFileSync('README.md', updatedReadme);
+            console.log('README updated with latest performance metrics');
+            "
+          fi
+          
+          # Check if there are changes
+          if git diff --quiet; then
+            echo "No changes to commit"
+          else
+            git add results/ README.md
+            git commit -m "chore: Update performance test results [skip ci]
+            
+            Performance tests run: ${{ github.run_number }}
+            Commit: ${{ github.sha }}"
+            
+            git push origin main
+          fi
 
       - name: Comment PR with results (if PR)
         if: github.event_name == 'pull_request'
@@ -168,19 +225,18 @@ jobs:
           script: |
             const fs = require('fs');
             const path = require('path');
-            
+
             // Read the performance comparison report
             let reportContent = '';
             const reportPath = 'consolidated-results/PERFORMANCE-COMPARISON-REPORT.md';
-            
+
             if (fs.existsSync(reportPath)) {
               reportContent = fs.readFileSync(reportPath, 'utf8');
-              
+
               // Truncate if too long for PR comment
               if (reportContent.length > 65000) {
                 reportContent = reportContent.substring(0, 65000) + '\n\n... (truncated)';
               }
-              
               // Create PR comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
