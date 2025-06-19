@@ -4,8 +4,11 @@
     "outDir": "dist",
     "types": ["node"],
     "rootDir": "src",
-    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo"
+    "tsBuildInfoFile": "dist/tsconfig.app.tsbuildinfo",
+    "emitDeclarationOnly": false,
+    "noEmit": false,
+    "isolatedModules": false
   },
   "include": ["src/**/*.ts"],
-  "exclude": []
+  "exclude": ["**/*.spec.ts", "**/*.test.ts", "../nestjs-*/**/*"]
 }

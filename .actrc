@@ -1,0 +1,11 @@
+# Configuration for act (GitHub Actions local runner)
+# Use medium size Ubuntu image that's closer to GitHub's runners
+-P ubuntu-latest=catthehacker/ubuntu:act-latest
+-P ubuntu-22.04=catthehacker/ubuntu:act-22.04
+-P ubuntu-20.04=catthehacker/ubuntu:act-20.04
+
+# Default runner
+--platform ubuntu-latest=linux/amd64
+
+# Use Docker network for services
+--network host
