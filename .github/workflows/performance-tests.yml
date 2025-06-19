@@ -13,6 +13,11 @@ on:
         default: '20,22,24'
         type: string
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   performance-test:
     runs-on: ubuntu-latest
