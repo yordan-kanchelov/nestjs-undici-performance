@@ -53,6 +53,48 @@ services:
     networks:
       - nestjs-benchmark
 
+  nestjs-express-axios-interceptor:
+    build:
+      context: .
+      dockerfile: apps/nestjs-express-axios-interceptor/Dockerfile
+    ports:
+      - "3005:3005"
+    environment:
+      - PORT=3005
+      - MOCK_SERVICE_URL=http://mock-service:3001/api/data
+    depends_on:
+      - mock-service
+    networks:
+      - nestjs-benchmark
+
+  nestjs-fastify-axios-interceptor:
+    build:
+      context: .
+      dockerfile: apps/nestjs-fastify-axios-interceptor/Dockerfile
+    ports:
+      - "3006:3006"
+    environment:
+      - PORT=3006
+      - MOCK_SERVICE_URL=http://mock-service:3001/api/data
+    depends_on:
+      - mock-service
+    networks:
+      - nestjs-benchmark
+
+  nestjs-fastify-undici-interceptor:
+    build:
+      context: .
+      dockerfile: apps/nestjs-fastify-undici-interceptor/Dockerfile
+    ports:
+      - "3007:3007"
+    environment:
+      - PORT=3007
+      - MOCK_SERVICE_URL=http://mock-service:3001/api/data
+    depends_on:
+      - mock-service
+    networks:
+      - nestjs-benchmark
+
 networks:
   nestjs-benchmark:
     driver: bridge

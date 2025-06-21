@@ -2,7 +2,7 @@ import http from 'k6/http';
 import { check } from 'k6';
 import { Rate, Trend, Counter } from 'k6/metrics';
 
-// Custom metrics
+// Custom metrics - No interceptors
 const fastifyAxiosDuration = new Trend('fastify_axios_duration', true);
 const fastifyUndiciDuration = new Trend('fastify_undici_duration', true);
 const expressAxiosDuration = new Trend('express_axios_duration', true);
@@ -12,6 +12,17 @@ const expressAxiosErrors = new Rate('express_axios_errors');
 const fastifyAxiosRequests = new Counter('fastify_axios_requests');
 const fastifyUndiciRequests = new Counter('fastify_undici_requests');
 const expressAxiosRequests = new Counter('express_axios_requests');
+
+// Custom metrics - With interceptors
+const expressAxiosInterceptorDuration = new Trend('express_axios_interceptor_duration', true);
+const fastifyAxiosInterceptorDuration = new Trend('fastify_axios_interceptor_duration', true);
+const fastifyUndiciInterceptorDuration = new Trend('fastify_undici_interceptor_duration', true);
+const expressAxiosInterceptorErrors = new Rate('express_axios_interceptor_errors');
+const fastifyAxiosInterceptorErrors = new Rate('fastify_axios_interceptor_errors');
+const fastifyUndiciInterceptorErrors = new Rate('fastify_undici_interceptor_errors');
+const expressAxiosInterceptorRequests = new Counter('express_axios_interceptor_requests');
+const fastifyAxiosInterceptorRequests = new Counter('fastify_axios_interceptor_requests');
+const fastifyUndiciInterceptorRequests = new Counter('fastify_undici_interceptor_requests');
 
 export const options = {
   scenarios: {
@@ -53,6 +64,45 @@ export const options = {
       exec: 'testFastifyUndici',
       startTime: '2m30s',
     },
+    express_axios_interceptor: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: '10s', target: 50 },   // Ramp up
+        { duration: '20s', target: 50 },   // Stay at 50 users
+        { duration: '10s', target: 100 },  // Ramp to 100
+        { duration: '20s', target: 100 },  // Stay at 100 users
+        { duration: '10s', target: 0 },    // Ramp down
+      ],
+      exec: 'testExpressAxiosInterceptor',
+      startTime: '3m45s',
+    },
+    fastify_axios_interceptor: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: '10s', target: 50 },   // Ramp up
+        { duration: '20s', target: 50 },   // Stay at 50 users
+        { duration: '10s', target: 100 },  // Ramp to 100
+        { duration: '20s', target: 100 },  // Stay at 100 users
+        { duration: '10s', target: 0 },    // Ramp down
+      ],
+      exec: 'testFastifyAxiosInterceptor',
+      startTime: '5m00s',
+    },
+    fastify_undici_interceptor: {
+      executor: 'ramping-vus',
+      startVUs: 0,
+      stages: [
+        { duration: '10s', target: 50 },   // Ramp up
+        { duration: '20s', target: 50 },   // Stay at 50 users
+        { duration: '10s', target: 100 },  // Ramp to 100
+        { duration: '20s', target: 100 },  // Stay at 100 users
+        { duration: '10s', target: 0 },    // Ramp down
+      ],
+      exec: 'testFastifyUndiciInterceptor',
+      startTime: '6m15s',
+    },
   },
   thresholds: {
     http_req_duration: ['p(95)<500', 'p(99)<1000'],
@@ -60,6 +110,7 @@ export const options = {
   },
 };
 
+// Test functions - No interceptors
 export function testExpressAxios() {
   const res = http.get('http://localhost:3014/api', {
     tags: { service: 'express-axios-node22' },
@@ -105,8 +156,54 @@ export function testFastifyUndici() {
   fastifyUndiciRequests.add(1);
 }
 
+// Test functions - With interceptors
+export function testExpressAxiosInterceptor() {
+  const res = http.get('http://localhost:3015/api', {
+    tags: { service: 'express-axios-interceptor-node22' },
+  });
+  
+  const success = check(res, {
+    'status is 200': (r) => r.status === 200,
+    'has data': (r) => JSON.parse(r.body).data?.length === 5,
+  });
+  
+  expressAxiosInterceptorDuration.add(res.timings.duration);
+  expressAxiosInterceptorErrors.add(!success);
+  expressAxiosInterceptorRequests.add(1);
+}
+
+export function testFastifyAxiosInterceptor() {
+  const res = http.get('http://localhost:3016/api', {
+    tags: { service: 'fastify-axios-interceptor-node22' },
+  });
+  
+  const success = check(res, {
+    'status is 200': (r) => r.status === 200,
+    'has data': (r) => JSON.parse(r.body).data?.length === 5,
+  });
+  
+  fastifyAxiosInterceptorDuration.add(res.timings.duration);
+  fastifyAxiosInterceptorErrors.add(!success);
+  fastifyAxiosInterceptorRequests.add(1);
+}
+
+export function testFastifyUndiciInterceptor() {
+  const res = http.get('http://localhost:3017/api', {
+    tags: { service: 'fastify-undici-interceptor-node22' },
+  });
+  
+  const success = check(res, {
+    'status is 200': (r) => r.status === 200,
+    'has data': (r) => JSON.parse(r.body).data?.length === 5,
+  });
+  
+  fastifyUndiciInterceptorDuration.add(res.timings.duration);
+  fastifyUndiciInterceptorErrors.add(!success);
+  fastifyUndiciInterceptorRequests.add(1);
+}
+
 export function handleSummary(data) {
-  // Extract metrics for both services
+  // Extract metrics for all services
   const getMetrics = (prefix) => {
     const duration = data.metrics[`${prefix}_duration`];
     const errors = data.metrics[`${prefix}_errors`];
@@ -134,9 +231,13 @@ export function handleSummary(data) {
     };
   };
   
+  // Get metrics for all services
   const expressAxiosMetrics = getMetrics('express_axios') || {};
   const fastifyAxiosMetrics = getMetrics('fastify_axios') || {};
   const fastifyUndiciMetrics = getMetrics('fastify_undici') || {};
+  const expressAxiosInterceptorMetrics = getMetrics('express_axios_interceptor') || {};
+  const fastifyAxiosInterceptorMetrics = getMetrics('fastify_axios_interceptor') || {};
+  const fastifyUndiciInterceptorMetrics = getMetrics('fastify_undici_interceptor') || {};
   
   // Calculate improvements
   const calcImprovement = (baseline, improved) => {
@@ -152,11 +253,9 @@ export function handleSummary(data) {
   
   // Helper to determine winner
   const getWinner = (metrics, compareFunc) => {
-    const values = [
-      { name: 'Express+Axios', value: metrics.express },
-      { name: 'Fastify+Axios', value: metrics.fastify },
-      { name: 'Fastify+Undici', value: metrics.undici }
-    ].filter(m => m.value !== undefined && m.value !== null);
+    const values = Object.entries(metrics)
+      .filter(([_, value]) => value !== undefined && value !== null)
+      .map(([name, value]) => ({ name, value }));
     
     if (values.length === 0) return 'N/A';
     
@@ -167,18 +266,18 @@ export function handleSummary(data) {
     return winner.name;
   };
   
-  // Create CSV content - Express as baseline
+  // Create CSV content - with all apps
   const csv = [
-    'Metric,Express+Axios (Baseline),Fastify+Axios,Fastify+Undici,Fastify+Axios vs Express+Axios (%),Fastify+Undici vs Express+Axios (%),Fastify+Undici vs Fastify+Axios (%),Winner',
-    `Total Requests,${expressAxiosMetrics.requests || 0},${fastifyAxiosMetrics.requests || 0},${fastifyUndiciMetrics.requests || 0},,,,`,
-    `Throughput (req/s),${(expressAxiosMetrics.rps || 0).toFixed(2)},${(fastifyAxiosMetrics.rps || 0).toFixed(2)},${(fastifyUndiciMetrics.rps || 0).toFixed(2)},${calcThroughputImprovement(expressAxiosMetrics.rps, fastifyAxiosMetrics.rps)},${calcThroughputImprovement(expressAxiosMetrics.rps, fastifyUndiciMetrics.rps)},${calcThroughputImprovement(fastifyAxiosMetrics.rps, fastifyUndiciMetrics.rps)},${getWinner({express: expressAxiosMetrics.rps, fastify: fastifyAxiosMetrics.rps, undici: fastifyUndiciMetrics.rps}, (a, b) => a > b)}`,
-    `Avg Response Time (ms),${(expressAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_avg || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_avg, fastifyAxiosMetrics.duration_avg)},${calcImprovement(expressAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg)},${calcImprovement(fastifyAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg)},${getWinner({express: expressAxiosMetrics.duration_avg, fastify: fastifyAxiosMetrics.duration_avg, undici: fastifyUndiciMetrics.duration_avg}, (a, b) => a < b)}`,
-    `Median Response Time (ms),${(expressAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_med || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_med, fastifyAxiosMetrics.duration_med)},${calcImprovement(expressAxiosMetrics.duration_med, fastifyUndiciMetrics.duration_med)},${calcImprovement(fastifyAxiosMetrics.duration_med, fastifyUndiciMetrics.duration_med)},${getWinner({express: expressAxiosMetrics.duration_med, fastify: fastifyAxiosMetrics.duration_med, undici: fastifyUndiciMetrics.duration_med}, (a, b) => a < b)}`,
-    `P95 Response Time (ms),${(expressAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_p95 || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_p95, fastifyAxiosMetrics.duration_p95)},${calcImprovement(expressAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95)},${calcImprovement(fastifyAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95)},${getWinner({express: expressAxiosMetrics.duration_p95, fastify: fastifyAxiosMetrics.duration_p95, undici: fastifyUndiciMetrics.duration_p95}, (a, b) => a < b)}`,
-    `P99 Response Time (ms),${(expressAxiosMetrics.duration_p99 || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_p99 || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_p99 || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_p99, fastifyAxiosMetrics.duration_p99)},${calcImprovement(expressAxiosMetrics.duration_p99, fastifyUndiciMetrics.duration_p99)},${calcImprovement(fastifyAxiosMetrics.duration_p99, fastifyUndiciMetrics.duration_p99)},${getWinner({express: expressAxiosMetrics.duration_p99, fastify: fastifyAxiosMetrics.duration_p99, undici: fastifyUndiciMetrics.duration_p99}, (a, b) => a < b)}`,
-    `Min Response Time (ms),${(expressAxiosMetrics.duration_min || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_min || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_min || 0).toFixed(2)},,,,`,
-    `Max Response Time (ms),${(expressAxiosMetrics.duration_max || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_max || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_max || 0).toFixed(2)},${calcImprovement(expressAxiosMetrics.duration_max, fastifyAxiosMetrics.duration_max)},${calcImprovement(expressAxiosMetrics.duration_max, fastifyUndiciMetrics.duration_max)},${calcImprovement(fastifyAxiosMetrics.duration_max, fastifyUndiciMetrics.duration_max)},${getWinner({express: expressAxiosMetrics.duration_max, fastify: fastifyAxiosMetrics.duration_max, undici: fastifyUndiciMetrics.duration_max}, (a, b) => a < b)}`,
-    `Error Rate (%),${((expressAxiosMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyAxiosMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyUndiciMetrics.error_rate || 0) * 100).toFixed(2)},,,${getWinner({express: expressAxiosMetrics.error_rate, fastify: fastifyAxiosMetrics.error_rate, undici: fastifyUndiciMetrics.error_rate}, (a, b) => a < b)}`,
+    'Metric,Express+Axios,Fastify+Axios,Fastify+Undici,Express+Axios+Interceptor,Fastify+Axios+Interceptor,Fastify+Undici+Interceptor,Winner (No Interceptor),Winner (With Interceptor)',
+    `Total Requests,${expressAxiosMetrics.requests || 0},${fastifyAxiosMetrics.requests || 0},${fastifyUndiciMetrics.requests || 0},${expressAxiosInterceptorMetrics.requests || 0},${fastifyAxiosInterceptorMetrics.requests || 0},${fastifyUndiciInterceptorMetrics.requests || 0},,`,
+    `Throughput (req/s),${(expressAxiosMetrics.rps || 0).toFixed(2)},${(fastifyAxiosMetrics.rps || 0).toFixed(2)},${(fastifyUndiciMetrics.rps || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.rps || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.rps || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.rps || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.rps, 'Fastify+Axios': fastifyAxiosMetrics.rps, 'Fastify+Undici': fastifyUndiciMetrics.rps}, (a, b) => a > b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.rps, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.rps, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.rps}, (a, b) => a > b)}`,
+    `Avg Response Time (ms),${(expressAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_avg || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_avg || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_avg || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_avg || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_avg || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.duration_avg, 'Fastify+Axios': fastifyAxiosMetrics.duration_avg, 'Fastify+Undici': fastifyUndiciMetrics.duration_avg}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.duration_avg, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.duration_avg, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.duration_avg}, (a, b) => a < b)}`,
+    `Median Response Time (ms),${(expressAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_med || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_med || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_med || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_med || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_med || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.duration_med, 'Fastify+Axios': fastifyAxiosMetrics.duration_med, 'Fastify+Undici': fastifyUndiciMetrics.duration_med}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.duration_med, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.duration_med, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.duration_med}, (a, b) => a < b)}`,
+    `P95 Response Time (ms),${(expressAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_p95 || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_p95 || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_p95 || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_p95 || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_p95 || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.duration_p95, 'Fastify+Axios': fastifyAxiosMetrics.duration_p95, 'Fastify+Undici': fastifyUndiciMetrics.duration_p95}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.duration_p95, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.duration_p95, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.duration_p95}, (a, b) => a < b)}`,
+    `P99 Response Time (ms),${(expressAxiosMetrics.duration_p99 || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_p99 || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_p99 || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_p99 || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_p99 || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_p99 || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.duration_p99, 'Fastify+Axios': fastifyAxiosMetrics.duration_p99, 'Fastify+Undici': fastifyUndiciMetrics.duration_p99}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.duration_p99, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.duration_p99, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.duration_p99}, (a, b) => a < b)}`,
+    `Min Response Time (ms),${(expressAxiosMetrics.duration_min || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_min || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_min || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_min || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_min || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_min || 0).toFixed(2)},,`,
+    `Max Response Time (ms),${(expressAxiosMetrics.duration_max || 0).toFixed(2)},${(fastifyAxiosMetrics.duration_max || 0).toFixed(2)},${(fastifyUndiciMetrics.duration_max || 0).toFixed(2)},${(expressAxiosInterceptorMetrics.duration_max || 0).toFixed(2)},${(fastifyAxiosInterceptorMetrics.duration_max || 0).toFixed(2)},${(fastifyUndiciInterceptorMetrics.duration_max || 0).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.duration_max, 'Fastify+Axios': fastifyAxiosMetrics.duration_max, 'Fastify+Undici': fastifyUndiciMetrics.duration_max}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.duration_max, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.duration_max, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.duration_max}, (a, b) => a < b)}`,
+    `Error Rate (%),${((expressAxiosMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyAxiosMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyUndiciMetrics.error_rate || 0) * 100).toFixed(2)},${((expressAxiosInterceptorMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyAxiosInterceptorMetrics.error_rate || 0) * 100).toFixed(2)},${((fastifyUndiciInterceptorMetrics.error_rate || 0) * 100).toFixed(2)},${getWinner({'Express+Axios': expressAxiosMetrics.error_rate, 'Fastify+Axios': fastifyAxiosMetrics.error_rate, 'Fastify+Undici': fastifyUndiciMetrics.error_rate}, (a, b) => a < b)},${getWinner({'Express+Axios+Interceptor': expressAxiosInterceptorMetrics.error_rate, 'Fastify+Axios+Interceptor': fastifyAxiosInterceptorMetrics.error_rate, 'Fastify+Undici+Interceptor': fastifyUndiciInterceptorMetrics.error_rate}, (a, b) => a < b)}`,
   ].join('\n');
   
   // Create detailed summary
@@ -187,15 +286,19 @@ export function handleSummary(data) {
       node_version: 'Node.js 22',
       timestamp: new Date().toISOString(),
       duration_seconds: Math.round((data.state.testRunDurationMs || 0) / 1000),
-      scenarios: ['express_axios', 'fastify_axios', 'fastify_undici'],
+      scenarios: ['express_axios', 'fastify_axios', 'fastify_undici', 'express_axios_interceptor', 'fastify_axios_interceptor', 'fastify_undici_interceptor'],
       max_vus: 100,
     },
     results: {
       express_axios: expressAxiosMetrics,
       fastify_axios: fastifyAxiosMetrics,
       fastify_undici: fastifyUndiciMetrics,
+      express_axios_interceptor: expressAxiosInterceptorMetrics,
+      fastify_axios_interceptor: fastifyAxiosInterceptorMetrics,
+      fastify_undici_interceptor: fastifyUndiciInterceptorMetrics,
     },
     comparison: {
+      // No interceptor comparisons
       fastify_axios_vs_express_axios: {
         throughput_improvement: calcThroughputImprovement(expressAxiosMetrics.rps, fastifyAxiosMetrics.rps) + '%',
         avg_response_improvement: calcImprovement(expressAxiosMetrics.duration_avg, fastifyAxiosMetrics.duration_avg) + '%',
@@ -213,6 +316,21 @@ export function handleSummary(data) {
         avg_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_avg, fastifyUndiciMetrics.duration_avg) + '%',
         p95_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_p95, fastifyUndiciMetrics.duration_p95) + '%',
         p99_response_improvement: calcImprovement(fastifyAxiosMetrics.duration_p99, fastifyUndiciMetrics.duration_p99) + '%',
+      },
+      // With interceptor comparisons
+      interceptor_overhead: {
+        express_axios: {
+          throughput_impact: calcThroughputImprovement(expressAxiosMetrics.rps, expressAxiosInterceptorMetrics.rps) + '%',
+          avg_response_impact: calcImprovement(expressAxiosInterceptorMetrics.duration_avg, expressAxiosMetrics.duration_avg) + '%',
+        },
+        fastify_axios: {
+          throughput_impact: calcThroughputImprovement(fastifyAxiosMetrics.rps, fastifyAxiosInterceptorMetrics.rps) + '%',
+          avg_response_impact: calcImprovement(fastifyAxiosInterceptorMetrics.duration_avg, fastifyAxiosMetrics.duration_avg) + '%',
+        },
+        fastify_undici: {
+          throughput_impact: calcThroughputImprovement(fastifyUndiciMetrics.rps, fastifyUndiciInterceptorMetrics.rps) + '%',
+          avg_response_impact: calcImprovement(fastifyUndiciInterceptorMetrics.duration_avg, fastifyUndiciMetrics.duration_avg) + '%',
+        },
       },
     },
   };

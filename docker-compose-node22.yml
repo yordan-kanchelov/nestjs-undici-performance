@@ -61,6 +61,54 @@ services:
     networks:
       - nestjs-benchmark-node22
 
+  nestjs-express-axios-interceptor-node22:
+    build:
+      context: .
+      dockerfile: apps/nestjs-express-axios-interceptor/Dockerfile
+      args:
+        NODE_VERSION: 22
+    ports:
+      - "3015:3005"
+    environment:
+      - PORT=3005
+      - MOCK_SERVICE_URL=http://mock-service-node22:3001/api/data
+    depends_on:
+      - mock-service-node22
+    networks:
+      - nestjs-benchmark-node22
+
+  nestjs-fastify-axios-interceptor-node22:
+    build:
+      context: .
+      dockerfile: apps/nestjs-fastify-axios-interceptor/Dockerfile
+      args:
+        NODE_VERSION: 22
+    ports:
+      - "3016:3006"
+    environment:
+      - PORT=3006
+      - MOCK_SERVICE_URL=http://mock-service-node22:3001/api/data
+    depends_on:
+      - mock-service-node22
+    networks:
+      - nestjs-benchmark-node22
+
+  nestjs-fastify-undici-interceptor-node22:
+    build:
+      context: .
+      dockerfile: apps/nestjs-fastify-undici-interceptor/Dockerfile
+      args:
+        NODE_VERSION: 22
+    ports:
+      - "3017:3007"
+    environment:
+      - PORT=3007
+      - MOCK_SERVICE_URL=http://mock-service-node22:3001/api/data
+    depends_on:
+      - mock-service-node22
+    networks:
+      - nestjs-benchmark-node22
+
 networks:
   nestjs-benchmark-node22:
     driver: bridge
