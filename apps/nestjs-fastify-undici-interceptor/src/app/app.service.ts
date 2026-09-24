@@ -23,7 +23,9 @@ export class AppService {
 
     return {
       message: 'Fastify Undici Interceptor Response',
-      data: results.map(res => res.body.json),
+      // nestjs-undici-interceptors returns axios-compatible responses with
+      // the body already read and parsed into `data`.
+      data: results.map((res) => res.data),
       duration: endTime - startTime,
       timestamp: new Date().toISOString(),
     };
