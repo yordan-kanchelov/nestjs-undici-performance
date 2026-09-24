@@ -1,3 +1,6 @@
+> [!IMPORTANT]
+> **This repository has moved.** The benchmarks now live in [`yordan-kanchelov/nestjs-undici/benchmarks`](https://github.com/yordan-kanchelov/nestjs-undici/tree/main/benchmarks), next to the library, so they run against the library code of each commit and pull request. Latest results: [documentation site](https://yordan-kanchelov.github.io/nestjs-undici/#/docs/benchmarks). This repository is kept read-only for history; its workflows have been removed.
+
 # NestJS HTTP Performance Comparison: Fastify vs Express vs Undici
 
 A comprehensive performance benchmark comparing three HTTP client/server configurations in NestJS applications. See [Architecture](#-architecture) section for detailed configuration descriptions.
