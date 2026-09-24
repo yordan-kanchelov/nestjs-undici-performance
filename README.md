@@ -16,8 +16,6 @@ A comprehensive performance benchmark comparing three HTTP client/server configu
 | **Fastify + Undici** | **20-28ms** | **74-75% faster** | **375-402%** |
 
 *Results from Node.js 20, 22, 24, 26. [View detailed results](#-latest-performance-results) | [View full report](results/PERFORMANCE-COMPARISON-REPORT.md)*
-
-*Environment: Local run on a single shared cloud VM (apps on native Node.js, k6 in Docker, same host) - compare configurations, not absolute ms, against Docker CI results*
 <!-- perf-summary:end -->
 
 ## 🎯 What This Repository Tests
