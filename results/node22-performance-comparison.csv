@@ -1,10 +1,10 @@
 Metric,Express+Axios,Fastify+Axios,Fastify+Undici,Express+Axios+Interceptor,Fastify+Axios+Interceptor,Fastify+Undici+Interceptor,Winner (No Interceptor),Winner (With Interceptor)
-Total Requests,151749,157501,451633,120512,132357,344607,,
-Throughput (req/s),2167.84,2250.01,6451.90,1721.60,1890.81,4922.96,Fastify+Undici,Fastify+Undici+Interceptor
-Avg Response Time (ms),29.57,28.49,9.91,37.25,33.92,13.02,Fastify+Undici,Fastify+Undici+Interceptor
-Median Response Time (ms),26.64,25.45,8.32,32.79,30.21,10.44,Fastify+Undici,Fastify+Undici+Interceptor
-P95 Response Time (ms),53.62,53.42,18.48,70.40,63.73,22.06,Fastify+Undici,Fastify+Undici+Interceptor
-P99 Response Time (ms),0.00,0.00,0.00,0.00,0.00,0.00,N/A,N/A
-Min Response Time (ms),0.56,0.56,0.26,0.69,0.63,0.33,,
-Max Response Time (ms),145.44,154.13,56.74,176.09,162.80,56.42,Fastify+Undici,Fastify+Undici+Interceptor
+Total Requests,45420,53565,182411,36207,43599,97746,,
+Throughput (req/s),648.86,765.21,2605.87,517.24,622.84,1396.37,Fastify+Undici,Fastify+Undici+Interceptor
+Avg Response Time (ms),98.87,83.81,24.49,124.11,103.02,45.83,Fastify+Undici,Fastify+Undici+Interceptor
+Median Response Time (ms),81.76,71.25,21.14,110.28,89.24,38.95,Fastify+Undici,Fastify+Undici+Interceptor
+P95 Response Time (ms),202.82,175.80,45.17,243.93,190.33,81.97,Fastify+Undici,Fastify+Undici+Interceptor
+P99 Response Time (ms),306.80,263.82,56.53,369.52,305.15,102.90,Fastify+Undici,Fastify+Undici+Interceptor
+Min Response Time (ms),1.62,1.49,0.56,1.98,1.74,0.86,,
+Max Response Time (ms),487.63,394.53,118.69,494.51,486.77,238.18,Fastify+Undici,Fastify+Undici+Interceptor
 Error Rate (%),0.00,0.00,0.00,0.00,0.00,0.00,Express+Axios,Express+Axios+Interceptor

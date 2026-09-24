@@ -50,9 +50,15 @@ const average = (values) => {
 const range = (values, decimals = 0, suffix = '') => {
   const nums = values.map(num).filter(isNum);
   if (!nums.length) return 'N/A';
-  const lo = Math.min(...nums).toFixed(decimals);
-  const hi = Math.max(...nums).toFixed(decimals);
-  return lo === hi ? `${lo}${suffix}` : `${lo}-${hi}${suffix}`;
+  const fmt = (v) => {
+    const text = v.toFixed(decimals);
+    return Number(text) === 0 ? (0).toFixed(decimals) : text; // avoid "-0"
+  };
+  const lo = fmt(Math.min(...nums));
+  const hi = fmt(Math.max(...nums));
+  if (lo === hi) return `${lo}${suffix}`;
+  // "-1 to 15" reads better than "-1-15" when the range crosses zero
+  return `${lo}${Number(lo) < 0 ? ' to ' : '-'}${hi}${suffix}`;
 };
 
 function indicator(improvement) {
@@ -78,12 +84,20 @@ function comparisonValues(runs, name, field = 'avg_response_improvement') {
   return runs.map((r) => r.data.comparison?.[name]?.[field]);
 }
 
-function overheadValues(runs, key) {
-  return runs.map((r) => r.data.comparison?.interceptor_overhead?.[key]?.avg_response_impact);
+// Interceptor overhead: how much slower the average response gets, relative
+// to the same configuration without interceptors (positive = slower).
+function interceptorOverhead(entry, key) {
+  const base = metric(entry, key, 'duration_avg');
+  const withInterceptor = metric(entry, `${key}_interceptor`, 'duration_avg');
+  return isNum(base) && isNum(withInterceptor) && base > 0 ? ((withInterceptor - base) / base) * 100 : NaN;
 }
 
-// Interceptor overhead as "how much slower" (positive = slower).
-const overheadSlower = (value) => (isNum(num(value)) ? -num(value) : NaN);
+// "12.3% faster" / "0.1% slower" for a lower-is-better improvement value.
+function fasterOrSlower(value) {
+  const n = num(value);
+  if (!isNum(n)) return 'N/A';
+  return n >= 0 ? `${n.toFixed(1)}% faster` : `${(-n).toFixed(1)}% slower`;
+}
 
 function packageVersion(name) {
   try {
@@ -204,7 +218,7 @@ function buildReport(runs) {
   lines.push('Overhead = how much slower the average response gets when interceptors are added.', '');
   lines.push(header(['Configuration', ...versions.map((v) => `Node ${v}`), 'Average']));
   for (const key of INTERCEPTOR_BASES) {
-    const values = overheadValues(runs, key).map(overheadSlower);
+    const values = runs.map((r) => interceptorOverhead(r, key));
     lines.push(row([labelOf(key), ...values.map(formatPercentage), formatPercentage(average(values))]));
   }
   lines.push('');
@@ -273,6 +287,9 @@ function readmeBlocks(runs) {
     '',
     `*Results from Node.js ${versions}. [View detailed results](#-latest-performance-results) | [View full report](results/PERFORMANCE-COMPARISON-REPORT.md)*`,
   ];
+  if (process.env.BENCHMARK_ENVIRONMENT) {
+    summary.push('', `*Environment: ${process.env.BENCHMARK_ENVIRONMENT}*`);
+  }
 
   const details = [
     `With 5 parallel HTTP requests per endpoint call, tested across Node.js ${versions}:`,
@@ -285,7 +302,7 @@ function readmeBlocks(runs) {
       const improvement =
         c.key === 'express_axios'
           ? 'baseline'
-          : `${formatPercentage(r.data.comparison?.[`${c.key}_vs_express_axios`]?.avg_response_improvement)} faster`;
+          : fasterOrSlower(r.data.comparison?.[`${c.key}_vs_express_axios`]?.avg_response_improvement);
       details.push(
         `| **Node ${r.version}** | ${c.label} | ${formatNumber(metric(r, c.key, 'duration_avg'))} | ${formatNumber(metric(r, c.key, 'duration_p95'))} | ${formatNumber(metric(r, c.key, 'duration_p99'))} | ${c.key === 'fastify_undici' ? `**${improvement}**` : improvement} |`
       );
@@ -296,8 +313,8 @@ function readmeBlocks(runs) {
   details.push('|--------------|-----------------|-----------------|------------------|');
   for (const r of runs) {
     const cell = (key) => {
-      const overhead = overheadSlower(r.data.comparison?.interceptor_overhead?.[key]?.avg_response_impact);
-      return `${formatNumber(metric(r, `${key}_interceptor`, 'duration_avg'))}ms (+${formatPercentage(overhead)})`;
+      const overhead = interceptorOverhead(r, key);
+      return `${formatNumber(metric(r, `${key}_interceptor`, 'duration_avg'))}ms (${overhead >= 0 ? '+' : ''}${formatPercentage(overhead)})`;
     };
     details.push(`| **Node ${r.version}** | ${cell('express_axios')} | ${cell('fastify_axios')} | ${cell('fastify_undici')} |`);
   }
