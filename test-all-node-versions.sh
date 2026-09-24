@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Script to test performance across Node.js 20, 22, and 24 with health checks
+# Script to test performance across Node.js 20, 22, 24, and 26 with health checks
 
 echo "======================================"
 echo "NestJS Performance Test - All Node Versions"
@@ -43,128 +43,46 @@ check_service_health() {
     return 1
 }
 
-# Function to detect ports from k6 script
-detect_ports_from_k6() {
-    local K6_SCRIPT=$1
-    local MOCK_PORT=""
-    local FASTIFY_AXIOS_PORT=""
-    local FASTIFY_UNDICI_PORT=""
-    local EXPRESS_AXIOS_PORT=""
-    local EXPRESS_AXIOS_INTERCEPTOR_PORT=""
-    local FASTIFY_AXIOS_INTERCEPTOR_PORT=""
-    local FASTIFY_UNDICI_INTERCEPTOR_PORT=""
-    
-    # Extract ports from the k6 script URLs (portable version)
-    if [ -f "$K6_SCRIPT" ]; then
-        # Look for localhost URLs in the script
-        # Parse the k6 script to find which port is for each service
-        if grep -q "testExpressAxios" "$K6_SCRIPT"; then
-            EXPRESS_AXIOS_PORT=$(grep -A5 "testExpressAxios" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        if grep -q "testFastifyAxios" "$K6_SCRIPT"; then
-            FASTIFY_AXIOS_PORT=$(grep -A5 "testFastifyAxios" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        if grep -q "testFastifyUndici" "$K6_SCRIPT"; then
-            FASTIFY_UNDICI_PORT=$(grep -A5 "testFastifyUndici" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        if grep -q "testExpressAxiosInterceptor" "$K6_SCRIPT"; then
-            EXPRESS_AXIOS_INTERCEPTOR_PORT=$(grep -A5 "testExpressAxiosInterceptor" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        if grep -q "testFastifyAxiosInterceptor" "$K6_SCRIPT"; then
-            FASTIFY_AXIOS_INTERCEPTOR_PORT=$(grep -A5 "testFastifyAxiosInterceptor" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        if grep -q "testFastifyUndiciInterceptor" "$K6_SCRIPT"; then
-            FASTIFY_UNDICI_INTERCEPTOR_PORT=$(grep -A5 "testFastifyUndiciInterceptor" "$K6_SCRIPT" | grep -E 'http://localhost:[0-9]+/api' | head -1 | sed -E 's/.*http:\/\/localhost:([0-9]+).*/\1/')
-        fi
-        
-        # For mock service, we can infer from fastify axios port
-        if [ "$FASTIFY_AXIOS_PORT" = "3002" ]; then
-            MOCK_PORT="3001"
-        elif [ "$FASTIFY_AXIOS_PORT" = "3012" ]; then
-            MOCK_PORT="3011"
-        elif [ "$FASTIFY_AXIOS_PORT" = "3022" ]; then
-            MOCK_PORT="3021"
-        fi
+# Node.js versions under test and their host port base (ports base+1 .. base+7)
+NODE_VERSIONS=(20 22 24 26)
+
+port_base_for() {
+    case "$1" in
+        20) echo 3000 ;;
+        22) echo 3010 ;;
+        24) echo 3020 ;;
+        26) echo 3030 ;;
+        *) echo "Unknown Node.js version: $1" >&2; return 1 ;;
+    esac
+}
+
+compose_file_for() {
+    if [ "$1" = "20" ]; then
+        echo "docker-compose.yml"
+    else
+        echo "docker-compose-node$1.yml"
     fi
-    
-    echo "$MOCK_PORT:$FASTIFY_AXIOS_PORT:$FASTIFY_UNDICI_PORT:$EXPRESS_AXIOS_PORT:$EXPRESS_AXIOS_INTERCEPTOR_PORT:$FASTIFY_AXIOS_INTERCEPTOR_PORT:$FASTIFY_UNDICI_INTERCEPTOR_PORT"
 }
 
 # Function to check all services for a Node version
 check_all_services() {
     local NODE_VERSION=$1
-    local K6_SCRIPT=$2
+    local BASE
+    BASE=$(port_base_for "$NODE_VERSION") || return 1
     local ALL_HEALTHY=true
-    
-    # Detect ports from k6 script
-    IFS=':' read -r MOCK_PORT FASTIFY_AXIOS_PORT FASTIFY_UNDICI_PORT EXPRESS_AXIOS_PORT EXPRESS_AXIOS_INTERCEPTOR_PORT FASTIFY_AXIOS_INTERCEPTOR_PORT FASTIFY_UNDICI_INTERCEPTOR_PORT <<< "$(detect_ports_from_k6 "$K6_SCRIPT")"
-    
+
     echo ""
     echo "Health checks for Node.js $NODE_VERSION:"
     echo "----------------------------------------"
-    echo "Detected ports:"
-    echo "  Mock: $MOCK_PORT"
-    echo "  Express+Axios: $EXPRESS_AXIOS_PORT"
-    echo "  Fastify+Axios: $FASTIFY_AXIOS_PORT"
-    echo "  Fastify+Undici: $FASTIFY_UNDICI_PORT"
-    echo "  Express+Axios+Interceptor: $EXPRESS_AXIOS_INTERCEPTOR_PORT"
-    echo "  Fastify+Axios+Interceptor: $FASTIFY_AXIOS_INTERCEPTOR_PORT"
-    echo "  Fastify+Undici+Interceptor: $FASTIFY_UNDICI_INTERCEPTOR_PORT"
-    
-    # Check mock service
-    if [ -n "$MOCK_PORT" ]; then
-        if ! check_service_health "Mock Service" "http://localhost:$MOCK_PORT/api/data"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Express+Axios service
-    if [ -n "$EXPRESS_AXIOS_PORT" ]; then
-        if ! check_service_health "Express+Axios" "http://localhost:$EXPRESS_AXIOS_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Fastify+Axios service
-    if [ -n "$FASTIFY_AXIOS_PORT" ]; then
-        if ! check_service_health "Fastify+Axios" "http://localhost:$FASTIFY_AXIOS_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Fastify+Undici service
-    if [ -n "$FASTIFY_UNDICI_PORT" ]; then
-        if ! check_service_health "Fastify+Undici" "http://localhost:$FASTIFY_UNDICI_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Express+Axios+Interceptor service
-    if [ -n "$EXPRESS_AXIOS_INTERCEPTOR_PORT" ]; then
-        if ! check_service_health "Express+Axios+Interceptor" "http://localhost:$EXPRESS_AXIOS_INTERCEPTOR_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Fastify+Axios+Interceptor service
-    if [ -n "$FASTIFY_AXIOS_INTERCEPTOR_PORT" ]; then
-        if ! check_service_health "Fastify+Axios+Interceptor" "http://localhost:$FASTIFY_AXIOS_INTERCEPTOR_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
-    # Check Fastify+Undici+Interceptor service
-    if [ -n "$FASTIFY_UNDICI_INTERCEPTOR_PORT" ]; then
-        if ! check_service_health "Fastify+Undici+Interceptor" "http://localhost:$FASTIFY_UNDICI_INTERCEPTOR_PORT/api"; then
-            ALL_HEALTHY=false
-        fi
-    fi
-    
+
+    check_service_health "Mock Service" "http://localhost:$((BASE + 1))/api/data" || ALL_HEALTHY=false
+    check_service_health "Fastify+Axios" "http://localhost:$((BASE + 2))/api" || ALL_HEALTHY=false
+    check_service_health "Fastify+Undici" "http://localhost:$((BASE + 3))/api" || ALL_HEALTHY=false
+    check_service_health "Express+Axios" "http://localhost:$((BASE + 4))/api" || ALL_HEALTHY=false
+    check_service_health "Express+Axios+Interceptor" "http://localhost:$((BASE + 5))/api" || ALL_HEALTHY=false
+    check_service_health "Fastify+Axios+Interceptor" "http://localhost:$((BASE + 6))/api" || ALL_HEALTHY=false
+    check_service_health "Fastify+Undici+Interceptor" "http://localhost:$((BASE + 7))/api" || ALL_HEALTHY=false
+
     if [ "$ALL_HEALTHY" = true ]; then
         echo -e "${GREEN}All services are healthy!${NC}"
         return 0
@@ -209,7 +127,7 @@ run_node_test() {
     sleep 5
     
     # Perform health checks
-    if ! check_all_services $NODE_VERSION $K6_SCRIPT; then
+    if ! check_all_services $NODE_VERSION; then
         echo -e "${YELLOW}Warning: Not all services are healthy. Checking logs...${NC}"
         
         # Get container names from docker compose
@@ -257,20 +175,11 @@ run_node_test() {
 echo "Starting comprehensive performance tests..."
 echo ""
 
-# Test with Node.js 20 (default)
-if ! run_node_test "20" "docker-compose.yml" "k6-scripts/test-node20.js"; then
-    echo -e "${RED}Node.js 20 test failed or was skipped${NC}"
-fi
-
-# Test with Node.js 22
-if ! run_node_test "22" "docker-compose-node22.yml" "k6-scripts/test-node22.js"; then
-    echo -e "${RED}Node.js 22 test failed or was skipped${NC}"
-fi
-
-# Test with Node.js 24
-if ! run_node_test "24" "docker-compose-node24.yml" "k6-scripts/test-node24.js"; then
-    echo -e "${RED}Node.js 24 test failed or was skipped${NC}"
-fi
+for NODE_VERSION in "${NODE_VERSIONS[@]}"; do
+    if ! run_node_test "$NODE_VERSION" "$(compose_file_for "$NODE_VERSION")" "k6-scripts/test-node$NODE_VERSION.js"; then
+        echo -e "${RED}Node.js $NODE_VERSION test failed or was skipped${NC}"
+    fi
+done
 
 # Generate comparison report if script exists
 if [ -f "generate-comparison-report.js" ]; then

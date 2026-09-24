@@ -1,7 +1,25 @@
 const fs = require('fs');
 const path = require('path');
 
-// Helper functions for data processing
+// Builds results/PERFORMANCE-COMPARISON-REPORT.md from every
+// results/node<version>-performance-summary.json that exists.
+// `--update-readme` instead refreshes the summary table in README.md.
+
+const RESULTS_DIR = 'results';
+const REPORT_PATH = path.join(RESULTS_DIR, 'PERFORMANCE-COMPARISON-REPORT.md');
+
+const CONFIGS = [
+  { key: 'express_axios', label: 'Express + Axios' },
+  { key: 'fastify_axios', label: 'Fastify + Axios' },
+  { key: 'fastify_undici', label: 'Fastify + Undici' },
+  { key: 'express_axios_interceptor', label: 'Express + Axios + Interceptor' },
+  { key: 'fastify_axios_interceptor', label: 'Fastify + Axios + Interceptor' },
+  { key: 'fastify_undici_interceptor', label: 'Fastify + Undici + Interceptor' },
+];
+const PLAIN = CONFIGS.filter((c) => !c.key.endsWith('_interceptor'));
+const INTERCEPTOR_BASES = PLAIN.map((c) => c.key);
+const labelOf = (key) => CONFIGS.find((c) => c.key === key)?.label ?? key;
+
 function readJSONFile(filePath) {
   try {
     return JSON.parse(fs.readFileSync(filePath, 'utf8'));
@@ -11,244 +29,319 @@ function readJSONFile(filePath) {
   }
 }
 
-function formatPercentage(value) {
-  if (typeof value === 'string' && value.includes('%')) return value;
-  if (typeof value === 'number') return `${value.toFixed(1)}%`;
-  return 'N/A';
+function loadResults() {
+  const files = fs.existsSync(RESULTS_DIR) ? fs.readdirSync(RESULTS_DIR) : [];
+  return files
+    .map((file) => file.match(/^node(\d+)-performance-summary\.json$/))
+    .filter(Boolean)
+    .map((match) => ({ version: Number(match[1]), data: readJSONFile(path.join(RESULTS_DIR, match[0])) }))
+    .filter((entry) => entry.data?.results)
+    .sort((a, b) => a.version - b.version);
 }
 
-function formatNumber(value, decimals = 2) {
-  return typeof value === 'number' ? value.toFixed(decimals) : 'N/A';
-}
+const num = (value) => (typeof value === 'number' ? value : parseFloat(value));
+const isNum = (value) => typeof value === 'number' && !Number.isNaN(value);
+const formatNumber = (value, decimals = 2) => (isNum(num(value)) ? num(value).toFixed(decimals) : 'N/A');
+const formatPercentage = (value) => (isNum(num(value)) ? `${num(value).toFixed(1)}%` : 'N/A');
+const average = (values) => {
+  const nums = values.map(num).filter(isNum);
+  return nums.length ? nums.reduce((a, b) => a + b, 0) / nums.length : NaN;
+};
+const range = (values, decimals = 0, suffix = '') => {
+  const nums = values.map(num).filter(isNum);
+  if (!nums.length) return 'N/A';
+  const lo = Math.min(...nums).toFixed(decimals);
+  const hi = Math.max(...nums).toFixed(decimals);
+  return lo === hi ? `${lo}${suffix}` : `${lo}-${hi}${suffix}`;
+};
 
-function getPerformanceIndicator(improvement) {
-  const value = parseFloat(improvement);
-  if (isNaN(value)) return '';
+function indicator(improvement) {
+  const value = num(improvement);
+  if (!isNum(value)) return '';
   if (value >= 50) return '🟢';
   if (value >= 20) return '🟡';
   return '🔴';
 }
 
-function calculateAverageAcrossNodes(results, metric, service) {
-  const values = ['node20', 'node22', 'node24']
-    .map(node => results[node]?.results[service]?.[metric])
-    .filter(v => typeof v === 'number');
-  
-  return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null;
+function metric(entry, key, field) {
+  return entry.data.results[key]?.[field];
 }
 
-function getBestConfiguration(nodeResults) {
-  if (!nodeResults?.results) return { config: 'N/A', time: 'N/A' };
-  
-  let best = { config: 'N/A', time: Infinity };
-  
-  Object.entries(nodeResults.results).forEach(([config, data]) => {
-    if (data.duration_avg && data.duration_avg < best.time) {
-      best = { config, time: data.duration_avg };
-    }
+function rankBy(entry, keys, field) {
+  return keys
+    .map((key) => ({ key, value: metric(entry, key, field) }))
+    .filter((r) => isNum(r.value))
+    .sort((a, b) => a.value - b.value);
+}
+
+function comparisonValues(runs, name, field = 'avg_response_improvement') {
+  return runs.map((r) => r.data.comparison?.[name]?.[field]);
+}
+
+function overheadValues(runs, key) {
+  return runs.map((r) => r.data.comparison?.interceptor_overhead?.[key]?.avg_response_impact);
+}
+
+// Interceptor overhead as "how much slower" (positive = slower).
+const overheadSlower = (value) => (isNum(num(value)) ? -num(value) : NaN);
+
+function packageVersion(name) {
+  try {
+    return require(`${name}/package.json`).version;
+  } catch {
+    const pkg = readJSONFile('package.json') || {};
+    return pkg.dependencies?.[name] ?? 'N/A';
+  }
+}
+
+function buildReport(runs) {
+  const versions = runs.map((r) => r.version);
+  const header = (cells) => `| ${cells.join(' | ')} |\n|${cells.map(() => '---').join('|')}|`;
+  const row = (cells) => `| ${cells.join(' | ')} |`;
+
+  const bestOverall = CONFIGS.map((c) => ({
+    key: c.key,
+    value: average(runs.map((r) => metric(r, c.key, 'duration_avg'))),
+  }))
+    .filter((c) => isNum(c.value))
+    .sort((a, b) => a.value - b.value);
+  const fastestUndici = runs
+    .map((r) => ({ version: r.version, value: metric(r, 'fastify_undici', 'duration_avg') }))
+    .filter((r) => isNum(r.value))
+    .sort((a, b) => a.value - b.value)[0];
+
+  const clientImpact = comparisonValues(runs, 'fastify_undici_vs_fastify_axios');
+  const combinedImpact = comparisonValues(runs, 'fastify_undici_vs_express_axios');
+  const combinedP95 = comparisonValues(runs, 'fastify_undici_vs_express_axios', 'p95_response_improvement');
+  const combinedThroughput = comparisonValues(runs, 'fastify_undici_vs_express_axios', 'throughput_improvement');
+  const frameworkImpact = comparisonValues(runs, 'fastify_axios_vs_express_axios');
+  const errorRates = runs.flatMap((r) => CONFIGS.map((c) => metric(r, c.key, 'error_rate')));
+  const maxErrorRate = Math.max(...errorRates.filter(isNum), 0);
+
+  const undiciInterceptorVsAxios = runs.map((r) => {
+    const undici = metric(r, 'fastify_undici_interceptor', 'duration_avg');
+    const bestAxios = Math.min(
+      ...['express_axios', 'fastify_axios'].map((k) => metric(r, k, 'duration_avg')).filter(isNum)
+    );
+    return isNum(undici) && isFinite(bestAxios) ? ((bestAxios - undici) / bestAxios) * 100 : NaN;
   });
-  
-  return { config: best.config, time: formatNumber(best.time) };
+
+  const lines = [];
+  lines.push('# NestJS HTTP Module Performance Comparison Report', '');
+  lines.push('## 🎯 Executive Summary', '');
+  lines.push(`Node.js versions tested: **${versions.map((v) => `Node ${v}`).join(', ')}**`, '');
+  if (bestOverall.length) {
+    lines.push(
+      `**Best Performer:** ${labelOf(bestOverall[0].key)} averages **${formatNumber(bestOverall[0].value)}ms** across all tested Node.js versions, ` +
+        `**${range(combinedImpact)}% faster** than the Express + Axios baseline.`,
+      ''
+    );
+  }
+  lines.push('### 🏆 Key Findings', '');
+  lines.push(`1. **HTTP client matters most** - Undici is ${range(clientImpact)}% faster than Axios on the same framework (Fastify)`);
+  lines.push(`2. **Framework matters less** - Fastify is ${range(frameworkImpact, 1)}% faster than Express with the same client (Axios)`);
+  if (fastestUndici) {
+    lines.push(
+      `3. **Fastest runtime for Undici:** Node.js ${fastestUndici.version} (${formatNumber(fastestUndici.value)}ms average)`
+    );
+  }
+  lines.push(
+    `4. **Interceptors keep Undici ahead** - Fastify + Undici with interceptors is ${range(undiciInterceptorVsAxios)}% faster than the best Axios configuration without interceptors`
+  );
+  lines.push(`5. **Error rate:** ${maxErrorRate === 0 ? '0% across all configurations' : `up to ${(maxErrorRate * 100).toFixed(2)}%`}`, '');
+  lines.push('---', '');
+
+  lines.push('## 📊 Performance at a Glance', '');
+  lines.push('### Best Configuration by Node.js Version');
+  lines.push(header(['Node Version', 'Best Config', 'Avg Response Time', 'Undici vs Baseline']));
+  for (const r of runs) {
+    const best = rankBy(r, CONFIGS.map((c) => c.key), 'duration_avg')[0];
+    const vsBaseline = r.data.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement;
+    lines.push(
+      row([
+        `Node ${r.version}`,
+        best ? labelOf(best.key) : 'N/A',
+        best ? `${formatNumber(best.value)}ms` : 'N/A',
+        `${formatPercentage(vsBaseline)} ${indicator(vsBaseline)}`.trim(),
+      ])
+    );
+  }
+  lines.push('');
+
+  lines.push('### Rankings (average across Node.js versions)');
+  lines.push(header(['Rank', 'Configuration', 'Avg Response', 'P95', 'Throughput (req/s)']));
+  bestOverall.forEach((c, i) => {
+    lines.push(
+      row([
+        String(i + 1),
+        labelOf(c.key),
+        `${formatNumber(c.value)}ms`,
+        `${formatNumber(average(runs.map((r) => metric(r, c.key, 'duration_p95'))))}ms`,
+        formatNumber(average(runs.map((r) => metric(r, c.key, 'rps'))), 0),
+      ])
+    );
+  });
+  lines.push('', '---', '');
+
+  lines.push('## 🔍 Key Performance Metrics', '');
+  lines.push('### Fastify + Undici vs Express + Axios');
+  lines.push(`- **Average Response Time:** ${range(combinedImpact)}% faster`);
+  lines.push(`- **P95 Response Time:** ${range(combinedP95)}% faster`);
+  lines.push(`- **Throughput:** ${range(combinedThroughput)}% higher`, '');
+
+  lines.push('### Improvements by Node.js Version (average response time)');
+  lines.push(header(['Comparison', ...versions.map((v) => `Node ${v}`)]));
+  for (const [name, label] of [
+    ['fastify_axios_vs_express_axios', 'Fastify+Axios vs Express+Axios'],
+    ['fastify_undici_vs_express_axios', 'Fastify+Undici vs Express+Axios'],
+    ['fastify_undici_vs_fastify_axios', 'Fastify+Undici vs Fastify+Axios'],
+  ]) {
+    lines.push(row([label, ...comparisonValues(runs, name).map(formatPercentage)]));
+  }
+  lines.push('', '---', '');
+
+  lines.push('## 🔄 Interceptor Performance Impact', '');
+  lines.push('Overhead = how much slower the average response gets when interceptors are added.', '');
+  lines.push(header(['Configuration', ...versions.map((v) => `Node ${v}`), 'Average']));
+  for (const key of INTERCEPTOR_BASES) {
+    const values = overheadValues(runs, key).map(overheadSlower);
+    lines.push(row([labelOf(key), ...values.map(formatPercentage), formatPercentage(average(values))]));
+  }
+  lines.push('');
+  lines.push(
+    '> **Note:** the Undici interceptor app uses the `nestjs-undici-interceptors` fork, which returns axios-compatible responses ' +
+      '(body read and parsed for you), while the plain Undici app uses `nestjs-undici` and parses `body.json()` itself. ' +
+      'The Undici "overhead" therefore includes the fork\'s response adaptation, not only the interceptor.',
+    ''
+  );
+  lines.push('---', '');
+
+  lines.push('## 📋 Detailed Results', '');
+  const matrix = (title, field, decimals, suffix) => {
+    lines.push(`### ${title}`);
+    lines.push(header(['Node Version', ...CONFIGS.map((c) => c.label)]));
+    for (const r of runs) {
+      lines.push(row([`Node ${r.version}`, ...CONFIGS.map((c) => `${formatNumber(metric(r, c.key, field), decimals)}${suffix}`)]));
+    }
+    lines.push('');
+  };
+  matrix('Average Response Time', 'duration_avg', 2, 'ms');
+  matrix('Median Response Time', 'duration_med', 2, 'ms');
+  matrix('P95 Response Time', 'duration_p95', 2, 'ms');
+  matrix('P99 Response Time', 'duration_p99', 2, 'ms');
+  matrix('Throughput (req/s)', 'rps', 0, '');
+  lines.push('---', '');
+
+  lines.push('## 🛠️ Test Configuration', '');
+  lines.push('- **Load Pattern**: 0 → 50 → 100 virtual users over 70 seconds per configuration');
+  lines.push('- **Workload**: each request triggers 5 parallel HTTP calls to a mock service');
+  lines.push(
+    `- **Environment**: ${process.env.BENCHMARK_ENVIRONMENT || 'Docker containers with isolated networking, one stack per Node.js version'}`
+  );
+  lines.push('- **Test Tool**: k6');
+  lines.push(
+    `- **Packages**: nestjs-undici ${packageVersion('nestjs-undici')}, nestjs-undici-interceptors ${packageVersion('nestjs-undici-interceptors')}, ` +
+      `undici ${packageVersion('undici')}, @nestjs/axios ${packageVersion('@nestjs/axios')}, axios ${packageVersion('axios')}, @nestjs/core ${packageVersion('@nestjs/core')}`
+  );
+  const timestamps = runs.map((r) => r.data.test_info?.timestamp).filter(Boolean).sort();
+  lines.push(`- **Test Runs**: ${timestamps.length ? timestamps.map((t) => t.split('T')[0]).filter((d, i, a) => a.indexOf(d) === i).join(', ') : 'N/A'}`);
+  lines.push('');
+
+  return lines.join('\n');
 }
 
-// Read all result files
-const results = {
-  node20: readJSONFile('results/node20-performance-summary.json'),
-  node22: readJSONFile('results/node22-performance-summary.json'),
-  node24: readJSONFile('results/node24-performance-summary.json')
-};
+function readmeBlocks(runs) {
+  const versions = runs.map((r) => r.version).join(', ');
+  const avg = (key) => range(runs.map((r) => metric(r, key, 'duration_avg')), 0, 'ms');
+  const vsBaseline = (name) => range(comparisonValues(runs, name), 0, '% faster');
+  const throughput = (name) => {
+    const values = comparisonValues(runs, name, 'throughput_improvement').map((v) => 100 + num(v));
+    return range(values, 0, '%');
+  };
+  const clientImpact = range(comparisonValues(runs, 'fastify_undici_vs_fastify_axios'));
 
-// Generate the improved report
-const report = `# NestJS HTTP Module Performance Comparison Report
+  const summary = [
+    `> **TL;DR: Undici is ${clientImpact}% faster than Axios across Node.js ${versions}**`,
+    '',
+    '### Latest Benchmark Results',
+    '',
+    '| Configuration | Avg Response Time | vs Baseline | Throughput |',
+    '|--------------|-------------------|-------------|------------|',
+    `| **Express + Axios** | ${avg('express_axios')} | baseline | 100% |`,
+    `| **Fastify + Axios** | ${avg('fastify_axios')} | ${vsBaseline('fastify_axios_vs_express_axios')} | ${throughput('fastify_axios_vs_express_axios')} |`,
+    `| **Fastify + Undici** | **${avg('fastify_undici')}** | **${vsBaseline('fastify_undici_vs_express_axios')}** | **${throughput('fastify_undici_vs_express_axios')}** |`,
+    '',
+    `*Results from Node.js ${versions}. [View detailed results](#-latest-performance-results) | [View full report](results/PERFORMANCE-COMPARISON-REPORT.md)*`,
+  ];
 
-## 🎯 Executive Summary
+  const details = [
+    `With 5 parallel HTTP requests per endpoint call, tested across Node.js ${versions}:`,
+    '',
+    '| Node Version | Configuration | Avg Response (ms) | P95 (ms) | P99 (ms) | vs Express+Axios |',
+    '|--------------|---------------|-------------------|----------|----------|------------------|',
+  ];
+  for (const r of runs) {
+    for (const c of PLAIN) {
+      const improvement =
+        c.key === 'express_axios'
+          ? 'baseline'
+          : `${formatPercentage(r.data.comparison?.[`${c.key}_vs_express_axios`]?.avg_response_improvement)} faster`;
+      details.push(
+        `| **Node ${r.version}** | ${c.label} | ${formatNumber(metric(r, c.key, 'duration_avg'))} | ${formatNumber(metric(r, c.key, 'duration_p95'))} | ${formatNumber(metric(r, c.key, 'duration_p99'))} | ${c.key === 'fastify_undici' ? `**${improvement}**` : improvement} |`
+      );
+    }
+  }
+  details.push('', '#### With Interceptors', '');
+  details.push('| Node Version | Express + Axios | Fastify + Axios | Fastify + Undici |');
+  details.push('|--------------|-----------------|-----------------|------------------|');
+  for (const r of runs) {
+    const cell = (key) => {
+      const overhead = overheadSlower(r.data.comparison?.interceptor_overhead?.[key]?.avg_response_impact);
+      return `${formatNumber(metric(r, `${key}_interceptor`, 'duration_avg'))}ms (+${formatPercentage(overhead)})`;
+    };
+    details.push(`| **Node ${r.version}** | ${cell('express_axios')} | ${cell('fastify_axios')} | ${cell('fastify_undici')} |`);
+  }
+  const fastest = runs
+    .map((r) => ({ version: r.version, value: metric(r, 'fastify_undici', 'duration_avg') }))
+    .filter((r) => isNum(r.value))
+    .sort((a, b) => a.value - b.value)[0];
+  details.push('', '### Key Findings', '');
+  details.push(`- **Undici is ${clientImpact}% faster than Axios** on the same framework (Fastify) across all tested Node.js versions`);
+  details.push(`- **Framework impact is smaller**: Fastify is ${range(comparisonValues(runs, 'fastify_axios_vs_express_axios'), 1)}% faster than Express with Axios`);
+  details.push(`- **Best configuration**: Fastify + Undici at ${avg('fastify_undici')} average${fastest ? `, fastest on Node.js ${fastest.version} (${formatNumber(fastest.value)}ms)` : ''}`);
+  details.push(`- **Throughput**: Fastify + Undici delivers ${range(comparisonValues(runs, 'fastify_undici_vs_express_axios', 'throughput_improvement'))}% more requests/s than Express + Axios`);
+  details.push(`- **Interceptors**: Fastify + Undici with interceptors averages ${avg('fastify_undici_interceptor')}, still well ahead of every Axios configuration`);
 
-**Best Performer:** Fastify + Undici (without interceptors) achieves **up to 74% faster response times** compared to the baseline Express + Axios configuration.
+  return { 'perf-summary': summary.join('\n'), 'perf-details': details.join('\n') };
+}
 
-### 🏆 Top 3 Key Findings
+function updateReadme(runs) {
+  let readme = fs.readFileSync('README.md', 'utf8');
+  for (const [name, content] of Object.entries(readmeBlocks(runs))) {
+    const start = `<!-- ${name}:start -->`;
+    const end = `<!-- ${name}:end -->`;
+    const from = readme.indexOf(start);
+    const to = readme.indexOf(end);
+    if (from === -1 || to === -1) {
+      console.error(`README.md is missing the ${name} markers; block not updated`);
+      process.exitCode = 1;
+      continue;
+    }
+    readme = readme.slice(0, from + start.length) + '\n' + content + '\n' + readme.slice(to);
+  }
+  fs.writeFileSync('README.md', readme);
+  console.log('README.md results updated');
+}
 
-1. **Undici dominates across all Node.js versions** - Average improvement of 60-74% over Axios
-2. **Node.js 24 + Undici = Best performance** - Achieving 8.78ms average response time
-3. **Interceptor overhead is manageable** - Only 2-31% overhead, with Undici still outperforming
+const runs = loadResults();
+if (runs.length === 0) {
+  console.error(`No results/node<version>-performance-summary.json files found in ${RESULTS_DIR}/`);
+  process.exit(1);
+}
 
-### 💡 Recommendation
-**Use Fastify + Undici for performance-critical NestJS applications** - Even with interceptors enabled, it outperforms all other configurations by 57-62%.
-
----
-
-## 📊 Performance at a Glance
-
-### Best Configuration by Node.js Version
-| Node Version | Best Config | Avg Response Time | vs Baseline |
-|--------------|-------------|-------------------|-------------|
-| Node 20 | ${getBestConfiguration(results.node20).config} | ${getBestConfiguration(results.node20).time}ms | ${results.node20?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'} ${getPerformanceIndicator(results.node20?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} |
-| Node 22 | ${getBestConfiguration(results.node22).config} | ${getBestConfiguration(results.node22).time}ms | ${results.node22?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'} ${getPerformanceIndicator(results.node22?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} |
-| Node 24 | ${getBestConfiguration(results.node24).config} | ${getBestConfiguration(results.node24).time}ms | ${results.node24?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement || 'N/A'} ${getPerformanceIndicator(results.node24?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} |
-
-### Performance Rankings (Without Interceptors)
-| Rank | Configuration | Avg Response (across all Node versions) | Performance |
-|------|---------------|----------------------------------------|-------------|
-| 1st 🥇 | Fastify + Undici | ${formatNumber(calculateAverageAcrossNodes(results, 'duration_avg', 'fastify_undici'))}ms | 🟢 Excellent |
-| 2nd 🥈 | Fastify + Axios | ${formatNumber(calculateAverageAcrossNodes(results, 'duration_avg', 'fastify_axios'))}ms | 🟡 Good |
-| 3rd 🥉 | Express + Axios | ${formatNumber(calculateAverageAcrossNodes(results, 'duration_avg', 'express_axios'))}ms | 🔴 Baseline |
-
----
-
-## 🔍 Key Performance Metrics
-
-### Response Time Improvements (Fastify + Undici vs Express + Axios)
-- **Average Response Time:** 65-74% faster
-- **P95 Response Time:** 63-75% faster  
-- **Throughput:** 187-283% higher
-- **Error Rate:** 0% (all configurations)
-
-### Framework Impact (Fastify vs Express with same HTTP client)
-- **Average improvement:** 1.7-16% faster response times
-- **Most significant on Node 20:** Up to 16% improvement
-- **Diminishing returns on newer Node versions**
-
-### HTTP Client Impact (Undici vs Axios with same framework)
-- **Average improvement:** 62-74% faster response times
-- **Consistent across all Node.js versions**
-- **Largest gains on Node 24:** Up to 74% improvement
-
----
-
-## 📈 Node.js Version Performance Summary
-
-### Node.js 20 (LTS)
-- **Best Configuration:** Fastify + Undici (9.79ms avg)
-- **Worst Configuration:** Express + Axios + Interceptor (37.79ms avg)
-- **Undici Advantage:** 62-71% faster than Axios variants
-
-### Node.js 22
-- **Best Configuration:** Fastify + Undici (9.91ms avg)
-- **Worst Configuration:** Express + Axios + Interceptor (37.25ms avg)
-- **Undici Advantage:** 65-67% faster than Axios variants
-
-### Node.js 24
-- **Best Configuration:** Fastify + Undici (8.78ms avg) ⭐
-- **Worst Configuration:** Express + Axios + Interceptor (35.10ms avg)
-- **Undici Advantage:** 74% faster than Axios variants
-
----
-
-## 🔄 Interceptor Performance Impact
-
-### Overhead by Configuration
-| Configuration | Node 20 | Node 22 | Node 24 | Average |
-|---------------|---------|---------|---------|---------|
-| Express + Axios | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} | ~15% |
-| Fastify + Axios | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} | ~12% |
-| Fastify + Undici | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} | ~27% |
-
-**Key Finding:** Despite higher relative overhead, Fastify + Undici with interceptors still outperforms all Axios configurations.
-
----
-
-## 🛠️ Test Configuration
-
-- **Load Pattern**: Ramping from 0 to 100 concurrent users over 70 seconds
-- **Test Workload**: Each request triggers 5 parallel HTTP calls to mock service
-- **Environment**: Docker containers with isolated networking
-- **Test Tool**: k6 load testing framework
-- **Date**: ${new Date().toISOString().split('T')[0]}
-
----
-
-## 📋 Detailed Technical Results
-
-<details>
-<summary>Click to expand detailed performance tables</summary>
-
-### Average Response Time (ms) - Without Interceptors
-| Node Version | Express+Axios | Fastify+Axios | Fastify+Undici | 
-|--------------|---------------|---------------|----------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_undici?.duration_avg)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_undici?.duration_avg)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_undici?.duration_avg)} |
-
-### Average Response Time (ms) - With Interceptors
-| Node Version | Express+Axios+Int | Fastify+Axios+Int | Fastify+Undici+Int |
-|--------------|-------------------|-------------------|---------------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios_interceptor?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_axios_interceptor?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_undici_interceptor?.duration_avg)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios_interceptor?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_axios_interceptor?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_undici_interceptor?.duration_avg)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios_interceptor?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_axios_interceptor?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_undici_interceptor?.duration_avg)} |
-
-### P95 Response Time (ms) - Without Interceptors
-| Node Version | Express+Axios | Fastify+Axios | Fastify+Undici |
-|--------------|---------------|---------------|----------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios?.duration_p95)} | ${formatNumber(results.node20?.results.fastify_axios?.duration_p95)} | ${formatNumber(results.node20?.results.fastify_undici?.duration_p95)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios?.duration_p95)} | ${formatNumber(results.node22?.results.fastify_axios?.duration_p95)} | ${formatNumber(results.node22?.results.fastify_undici?.duration_p95)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios?.duration_p95)} | ${formatNumber(results.node24?.results.fastify_axios?.duration_p95)} | ${formatNumber(results.node24?.results.fastify_undici?.duration_p95)} |
-
-### P95 Response Time (ms) - With Interceptors
-| Node Version | Express+Axios+Int | Fastify+Axios+Int | Fastify+Undici+Int |
-|--------------|-------------------|-------------------|---------------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios_interceptor?.duration_p95)} | ${formatNumber(results.node20?.results.fastify_axios_interceptor?.duration_p95)} | ${formatNumber(results.node20?.results.fastify_undici_interceptor?.duration_p95)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios_interceptor?.duration_p95)} | ${formatNumber(results.node22?.results.fastify_axios_interceptor?.duration_p95)} | ${formatNumber(results.node22?.results.fastify_undici_interceptor?.duration_p95)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios_interceptor?.duration_p95)} | ${formatNumber(results.node24?.results.fastify_axios_interceptor?.duration_p95)} | ${formatNumber(results.node24?.results.fastify_undici_interceptor?.duration_p95)} |
-
-### Throughput (requests/second) - Without Interceptors
-| Node Version | Express+Axios | Fastify+Axios | Fastify+Undici |
-|--------------|---------------|---------------|----------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios?.rps, 0)} | ${formatNumber(results.node20?.results.fastify_axios?.rps, 0)} | ${formatNumber(results.node20?.results.fastify_undici?.rps, 0)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios?.rps, 0)} | ${formatNumber(results.node22?.results.fastify_axios?.rps, 0)} | ${formatNumber(results.node22?.results.fastify_undici?.rps, 0)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios?.rps, 0)} | ${formatNumber(results.node24?.results.fastify_axios?.rps, 0)} | ${formatNumber(results.node24?.results.fastify_undici?.rps, 0)} |
-
-### Throughput (requests/second) - With Interceptors
-| Node Version | Express+Axios+Int | Fastify+Axios+Int | Fastify+Undici+Int |
-|--------------|-------------------|-------------------|---------------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios_interceptor?.rps, 0)} | ${formatNumber(results.node20?.results.fastify_axios_interceptor?.rps, 0)} | ${formatNumber(results.node20?.results.fastify_undici_interceptor?.rps, 0)} |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios_interceptor?.rps, 0)} | ${formatNumber(results.node22?.results.fastify_axios_interceptor?.rps, 0)} | ${formatNumber(results.node22?.results.fastify_undici_interceptor?.rps, 0)} |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios_interceptor?.rps, 0)} | ${formatNumber(results.node24?.results.fastify_axios_interceptor?.rps, 0)} | ${formatNumber(results.node24?.results.fastify_undici_interceptor?.rps, 0)} |
-
-### Performance Improvements - Without Interceptors
-| Comparison | Node 20 | Node 22 | Node 24 |
-|------------|---------|---------|---------|
-| Fastify+Axios vs Express+Axios | ${formatPercentage(results.node20?.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement)} | ${formatPercentage(results.node22?.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement)} | ${formatPercentage(results.node24?.comparison?.fastify_axios_vs_express_axios?.avg_response_improvement)} |
-| Fastify+Undici vs Express+Axios | ${formatPercentage(results.node20?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} | ${formatPercentage(results.node22?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} | ${formatPercentage(results.node24?.comparison?.fastify_undici_vs_express_axios?.avg_response_improvement)} |
-| Fastify+Undici vs Fastify+Axios | ${formatPercentage(results.node20?.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement)} | ${formatPercentage(results.node22?.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement)} | ${formatPercentage(results.node24?.comparison?.fastify_undici_vs_fastify_axios?.avg_response_improvement)} |
-
-### Interceptor Overhead Details
-| Node Version | Configuration | Base (ms) | With Interceptor (ms) | Overhead |
-|--------------|---------------|-----------|----------------------|----------|
-| Node 20 | Express+Axios | ${formatNumber(results.node20?.results.express_axios?.duration_avg)} | ${formatNumber(results.node20?.results.express_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} |
-| Node 20 | Fastify+Axios | ${formatNumber(results.node20?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} |
-| Node 20 | Fastify+Undici | ${formatNumber(results.node20?.results.fastify_undici?.duration_avg)} | ${formatNumber(results.node20?.results.fastify_undici_interceptor?.duration_avg)} | ${formatPercentage(results.node20?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} |
-| Node 22 | Express+Axios | ${formatNumber(results.node22?.results.express_axios?.duration_avg)} | ${formatNumber(results.node22?.results.express_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} |
-| Node 22 | Fastify+Axios | ${formatNumber(results.node22?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} |
-| Node 22 | Fastify+Undici | ${formatNumber(results.node22?.results.fastify_undici?.duration_avg)} | ${formatNumber(results.node22?.results.fastify_undici_interceptor?.duration_avg)} | ${formatPercentage(results.node22?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} |
-| Node 24 | Express+Axios | ${formatNumber(results.node24?.results.express_axios?.duration_avg)} | ${formatNumber(results.node24?.results.express_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.express_axios?.avg_response_impact)} |
-| Node 24 | Fastify+Axios | ${formatNumber(results.node24?.results.fastify_axios?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_axios_interceptor?.duration_avg)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.fastify_axios?.avg_response_impact)} |
-| Node 24 | Fastify+Undici | ${formatNumber(results.node24?.results.fastify_undici?.duration_avg)} | ${formatNumber(results.node24?.results.fastify_undici_interceptor?.duration_avg)} | ${formatPercentage(results.node24?.comparison?.interceptor_overhead?.fastify_undici?.avg_response_impact)} |
-
-### Complete Performance Matrix (All 6 Configurations)
-| Node Version | Express+Axios | Express+Axios+Int | Fastify+Axios | Fastify+Axios+Int | Fastify+Undici | Fastify+Undici+Int |
-|--------------|---------------|-------------------|---------------|-------------------|----------------|---------------------|
-| Node 20 | ${formatNumber(results.node20?.results.express_axios?.duration_avg)}ms | ${formatNumber(results.node20?.results.express_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node20?.results.fastify_axios?.duration_avg)}ms | ${formatNumber(results.node20?.results.fastify_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node20?.results.fastify_undici?.duration_avg)}ms | ${formatNumber(results.node20?.results.fastify_undici_interceptor?.duration_avg)}ms |
-| Node 22 | ${formatNumber(results.node22?.results.express_axios?.duration_avg)}ms | ${formatNumber(results.node22?.results.express_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node22?.results.fastify_axios?.duration_avg)}ms | ${formatNumber(results.node22?.results.fastify_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node22?.results.fastify_undici?.duration_avg)}ms | ${formatNumber(results.node22?.results.fastify_undici_interceptor?.duration_avg)}ms |
-| Node 24 | ${formatNumber(results.node24?.results.express_axios?.duration_avg)}ms | ${formatNumber(results.node24?.results.express_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node24?.results.fastify_axios?.duration_avg)}ms | ${formatNumber(results.node24?.results.fastify_axios_interceptor?.duration_avg)}ms | ${formatNumber(results.node24?.results.fastify_undici?.duration_avg)}ms | ${formatNumber(results.node24?.results.fastify_undici_interceptor?.duration_avg)}ms |
-
-</details>
-
----
-
-## 📌 Conclusions
-
-1. **Fastify + Undici is the clear performance winner** across all Node.js versions
-2. **Node.js 24 offers the best performance** for Undici-based configurations
-3. **Interceptor overhead is acceptable** - Undici with interceptors still beats Axios without
-4. **Framework choice matters less than HTTP client** - Undici provides 60-74% improvement vs 2-16% for Fastify
-5. **Zero error rates** across all configurations demonstrate stability
-
-### 🚀 Action Items
-- Migrate performance-critical services to Fastify + Undici
-- Consider Node.js 24 for maximum performance gains
-- Implement interceptors without significant performance concerns
-- Monitor real-world performance to validate benchmark results
-`;
-
-// Write the improved report
-fs.writeFileSync('results/PERFORMANCE-COMPARISON-REPORT.md', report);
-console.log('Improved report generated: results/PERFORMANCE-COMPARISON-REPORT.md');
+if (process.argv.includes('--update-readme')) {
+  updateReadme(runs);
+} else {
+  fs.writeFileSync(REPORT_PATH, buildReport(runs));
+  console.log(`Report written to ${REPORT_PATH} (Node.js ${runs.map((r) => r.version).join(', ')})`);
+}

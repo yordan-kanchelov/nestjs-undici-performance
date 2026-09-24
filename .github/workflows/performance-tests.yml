@@ -8,9 +8,9 @@ on:
   workflow_dispatch:
     inputs:
       node_versions:
-        description: 'Node.js versions to test (comma-separated, e.g., 20,22,24)'
+        description: 'Node.js versions to test (comma-separated, e.g., 20,22,24,26)'
         required: false
-        default: '20,22,24'
+        default: '20,22,24,26'
         type: string
 
 permissions:
@@ -22,8 +22,9 @@ jobs:
   performance-test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
-        node-version: [20, 22, 24]
+        node-version: ${{ fromJSON(format('[{0}]', github.event.inputs.node_versions || '20,22,24,26')) }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -88,11 +89,6 @@ jobs:
         run: |
           k6 run k6-scripts/test-node${{ matrix.node-version }}.js
 
-      - name: Generate comparison report
-        if: matrix.node-version == 24 # Only generate final report after all tests
-        run: |
-          node generate-comparison-report.js
-
       - name: Upload test results
         uses: actions/upload-artifact@v4
         with:
@@ -100,14 +96,6 @@ jobs:
           path: |
             results/node${{ matrix.node-version }}-performance-comparison.csv
             results/node${{ matrix.node-version }}-performance-summary.json
-          retention-days: 30
-
-      - name: Upload comparison report
-        if: matrix.node-version == 24
-        uses: actions/upload-artifact@v4
-        with:
-          name: performance-comparison-report
-          path: results/PERFORMANCE-COMPARISON-REPORT.md
           retention-days: 30
 
       - name: Stop services
@@ -133,21 +121,24 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
 
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
           path: artifacts
 
-      - name: Consolidate results
+      - name: Consolidate results and generate report
         run: |
           mkdir -p consolidated-results
-          # Copy all results to consolidated directory
-          find artifacts -name "*.csv" -o -name "*.json" -o -name "*.md" | while read file; do
+          # Copy all per-version results next to the committed ones so the report
+          # covers every Node.js version from this run
+          find artifacts -name "*.csv" -o -name "*.json" | while read file; do
             cp "$file" consolidated-results/
+            cp "$file" results/
           done
-          # List all results
+          node generate-comparison-report.js
+          cp results/PERFORMANCE-COMPARISON-REPORT.md consolidated-results/
           echo "=== Consolidated Performance Test Results ==="
           ls -la consolidated-results/
 
@@ -165,46 +156,13 @@ jobs:
           git config --local user.email "github-actions[bot]@users.noreply.github.com"
           git config --local user.name "github-actions[bot]"
           
-          # Copy results to the results directory
-          cp -r consolidated-results/* results/
-          
           # Add timestamp to the report
           DATE=$(date -u +"%Y-%m-%d %H:%M:%S UTC")
           echo -e "\n\n---\n*Last updated: $DATE*" >> results/PERFORMANCE-COMPARISON-REPORT.md
-          
-          # Update README with latest results summary
-          if [ -f "consolidated-results/PERFORMANCE-COMPARISON-REPORT.md" ]; then
-            # Extract key metrics from the report for the README
-            node -e "
-            const fs = require('fs');
-            const report = fs.readFileSync('consolidated-results/PERFORMANCE-COMPARISON-REPORT.md', 'utf8');
-            
-            // Extract average response times across all Node versions
-            const extractMetric = (config) => {
-              const regex = new RegExp(config + '.*?(\\\\d+\\\\.\\\\d+)ms', 'g');
-              const matches = [...report.matchAll(regex)];
-              const values = matches.map(m => parseFloat(m[1]));
-              return values.length > 0 ? Math.round(Math.min(...values)) + '-' + Math.round(Math.max(...values)) : 'N/A';
-            };
-            
-            const expressAxios = extractMetric('Express \\\\+ Axios.*?\\\\|.*?\\\\|');
-            const fastifyAxios = extractMetric('Fastify \\\\+ Axios.*?\\\\|.*?\\\\|');
-            const fastifyUndici = extractMetric('Fastify \\\\+ Undici.*?\\\\|.*?\\\\|');
-            
-            // Update README performance table
-            const readme = fs.readFileSync('README.md', 'utf8');
-            const updatedReadme = readme.replace(
-              /\\| \\*\\*Express \\+ Axios\\*\\* \\|.*?\\|.*?\\|.*?\\|[\\s\\S]*?\\| \\*\\*Fastify \\+ Undici\\*\\* \\|.*?\\|.*?\\|.*?\\|/,
-              \`| **Express + Axios** | \${expressAxios}ms | baseline | 100% |
-| **Fastify + Axios** | \${fastifyAxios}ms | 4-22% faster | 108-123% |
-| **Fastify + Undici** | **\${fastifyUndici}ms** | **69-71% faster** | **220-337%** |\`
-            );
-            
-            fs.writeFileSync('README.md', updatedReadme);
-            console.log('README updated with latest performance metrics');
-            "
-          fi
-          
+
+          # Update README summary table from the fresh results
+          node generate-comparison-report.js --update-readme
+
           # Check if there are changes
           if git diff --quiet; then
             echo "No changes to commit"
